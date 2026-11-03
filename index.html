@@ -1,0 +1,26 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Maths Practice</title><meta name="theme-color" content="#0b3d91">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Maths">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/icon-192.png"><link rel="icon" href="./icons/icon-192.png">
+<link rel="stylesheet" href="./style.css"></head><body>
+<header><h1 data-i18n="app.title"></h1><nav><button id="nHome" data-i18n="nav.home"></button><button id="nProg" data-i18n="nav.progress"></button><button id="lang" aria-label="Language">中文</button></nav></header>
+<main>
+<section id="home"><label for="year" data-i18n="home.year"></label><select id="year"></select>
+<label for="topic" data-i18n="home.topic"></label><select id="topic"></select>
+<label for="diff" data-i18n="home.diff"></label><select id="diff"></select>
+<label for="count" data-i18n="home.count"></label><select id="count"></select>
+<button id="start" class="primary" data-i18n="home.start"></button></section>
+<section id="quiz" hidden><p id="prog"></p><h2 id="qtext"></h2>
+<input id="ans" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" data-i18n-ph="quiz.ph">
+<p class="sub" data-i18n="quiz.hint"></p><p id="fb" role="status"></p>
+<button id="check" class="primary" data-i18n="quiz.check"></button><button id="next" class="primary" hidden></button>
+<button id="quit" class="ghost" data-i18n="quiz.quit"></button></section>
+<section id="results" hidden><h2 data-i18n="res.title"></h2><p id="score" class="big"></p>
+<button id="parent" class="ghost"></button><ol id="list"></ol>
+<button id="again" class="primary" data-i18n="res.again"></button><button id="toHome" class="ghost" data-i18n="res.home"></button></section>
+<section id="progress" hidden><h2 data-i18n="prog.title"></h2><div id="pbody"></div><button id="reset" class="ghost" data-i18n="prog.reset"></button></section>
+</main>
+<dialog id="pinDlg"><h3 id="pinTitle"></h3><input id="pinIn" type="password" inputmode="numeric" maxlength="4" autocomplete="off"><p id="pinMsg" class="bad"></p>
+<div class="row"><button id="pinCancel" class="ghost" data-i18n="pin.cancel"></button><button id="pinOk" class="primary" data-i18n="pin.ok"></button></div></dialog>
+<script src="./i18n.js"></script><script src="./engine.js"></script><script src="./app.js"></script></body></html>
