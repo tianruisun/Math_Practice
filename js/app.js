@@ -20,7 +20,8 @@
   /* ---------- state ---------- */
   const YEARS = [4, 5, 6, 7, 8, 9, 10];
   const COUNTS = [5, 10, 15, 20];
-  const defaults = { year: 6, topic: 'mixed', diff: 1, count: 10 };
+  const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10 };
+  const SUBJECTS = ['maths', 'ga'];
   const S = {
     screen: 'home',
     settings: Object.assign({}, defaults, store.get(K.settings, {})),
@@ -65,19 +66,34 @@
     });
   }
 
-  function topicOptions(year) {
-    return [['mixed', t('topic.mixed')], ...Generator.topicsFor(year).map(k => [k, t('topic.' + k)])];
+  function topicOptions(subject, year) {
+    return [['mixed', t('topic.mixed')], ...Gen.topicsFor(subject, year).map(k => [k, t('topic.' + k)])];
+  }
+
+  /* text of the correct answer / of what the student gave, in the current language */
+  function answerText(q) {
+    if (q.type === 'mc') { const c = q.choices[q.correct]; return 'ABCDE'[q.correct] + '. ' + (c[lang()] || c.en); }
+    return q.answer;
+  }
+  function givenText(q, given) {
+    if (!given || !given.length) return t('res.blank');
+    if (q.type === 'mc') return given.map(i => { const c = q.choices[i]; return c ? 'ABCDE'[i] + '. ' + (c[lang()] || c.en) : ''; }).join(' → ');
+    return given.join(' → ');
   }
 
   function saveSettings() { store.set(K.settings, S.settings); }
 
   function renderHome() {
     const st = S.settings;
-    if (st.topic !== 'mixed' && !Generator.topicsFor(st.year).includes(st.topic)) st.topic = 'mixed';
+    if (!SUBJECTS.includes(st.subject)) st.subject = 'maths';
+    if (![1, 2, 3, 4].includes(st.diff)) st.diff = 2;
+    if (st.topic !== 'mixed' && !Gen.topicsFor(st.subject, st.year).includes(st.topic)) st.topic = 'mixed';
+    chips($('#subjectChips'), 'subject', SUBJECTS.map(s => [s, t('subject.' + s)]), st.subject, v => { st.subject = v; st.topic = 'mixed'; saveSettings(); renderHome(); });
+    $('#subjectNote').textContent = t(st.subject === 'ga' ? 'home.gaNote' : 'home.levelNote');
     chips($('#yearChips'), 'year', YEARS.map(y => [y, String(y)]), st.year, v => { st.year = v; saveSettings(); renderHome(); });
     $('#yearChips').setAttribute('aria-label', t('home.year'));
-    chips($('#topicChips'), 'topic', topicOptions(st.year), st.topic, v => { st.topic = v; saveSettings(); });
-    chips($('#diffChips'), 'diff', [1, 2, 3].map(d => [d, t('diff.' + d)]), st.diff, v => { st.diff = v; saveSettings(); });
+    chips($('#topicChips'), 'topic', topicOptions(st.subject, st.year), st.topic, v => { st.topic = v; saveSettings(); });
+    chips($('#diffChips'), 'diff', [1, 2, 3, 4].map(d => [d, t('diff.' + d)]), st.diff, v => { st.diff = v; saveSettings(); });
     chips($('#countChips'), 'count', COUNTS.map(n => [n, String(n)]), st.count, v => { st.count = v; saveSettings(); });
     const ai = aiConfig();
     $('#sourceLine').textContent = ai ? t('home.source.ai', { name: AI.PROVIDERS[ai.provider].name }) : t('home.source.local');
@@ -88,10 +104,10 @@
     const c = store.get(K.ai, null);
     return c && c.provider && c.provider !== 'local' && c.key ? c : null;
   }
-  function topicNames(year) { return Generator.topicsFor(year).map(k => [k, window.I18N.STRINGS.en['topic.' + k]]); }
+  function topicNames(subject, year) { return Gen.topicsFor(subject, year).map(k => [k, window.I18N.STRINGS.en['topic.' + k]]); }
 
   async function startQuiz(settings) {
-    const { year, topic, diff, count } = settings;
+    const { year, topic, diff, count } = settings, subject = settings.subject || 'maths';
     S.lastQuizSettings = Object.assign({}, settings);
     let questions = null;
     const ai = aiConfig();
@@ -102,9 +118,9 @@
         S.loadingName = AI.PROVIDERS[ai.provider].name;
         go('loading');
         try {
-          questions = await AI.generateSet(ai, year, topic, diff, count, topicNames(year));
+          questions = await AI.generateSet(ai, subject, year, topic, diff, count, topicNames(subject, year));
           if (questions.length < count) {
-            questions = questions.concat(Generator.generateSet(year, topic, diff, count - questions.length));
+            questions = questions.concat(Gen.generateSet(subject, year, topic, diff, count - questions.length));
           }
         } catch (e) {
           console.warn('AI generation failed:', e);
@@ -114,8 +130,8 @@
         if (S.screen !== 'loading') return; // user navigated away while waiting
       }
     }
-    if (!questions) questions = Generator.generateSet(year, topic, diff, count);
-    S.quiz = { questions, i: 0, results: [], tries: 0, status: 'answering', fbKey: '', settings: Object.assign({}, settings) };
+    if (!questions) questions = Gen.generateSet(subject, year, topic, diff, count);
+    S.quiz = { questions, i: 0, results: [], tries: 0, sel: null, status: 'answering', fbKey: '', settings: Object.assign({ subject }, settings) };
     $('#answer').value = '';
     go('quiz');
     focusAnswer();
@@ -126,7 +142,23 @@
   }
 
   /* ---------- QUIZ ---------- */
-  function focusAnswer() { setTimeout(() => { const a = $('#answer'); if (!a.disabled) a.focus({ preventScroll: true }); }, 50); }
+  function focusAnswer() {
+    const Q = S.quiz; if (Q && Q.questions[Q.i] && Q.questions[Q.i].type === 'mc') return;
+    setTimeout(() => { const a = $('#answer'); if (!a.disabled) a.focus({ preventScroll: true }); }, 50);
+  }
+
+  function renderChoices(q, Q, done) {
+    const box = $('#choices'); box.innerHTML = '';
+    q.choices.forEach((c, i) => {
+      const b = el('button', 'choice'); b.type = 'button';
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(Q.sel === i));
+      b.disabled = done;
+      if (done && S.parent && i === q.correct) b.classList.add('is-correct');
+      b.append(el('span', 'letter', 'ABCDE'[i]), el('span', '', c[lang()] || c.en));
+      b.addEventListener('click', () => { if (Q.status === 'done') return; Q.sel = i; Q.fbKey = ''; renderQuiz(); });
+      box.append(b);
+    });
+  }
 
   function renderQuiz() {
     const Q = S.quiz; if (!Q) return go('home');
@@ -135,6 +167,10 @@
     $('#qTopic').textContent = t('topic.' + q.topic);
     $('#qBar').style.width = (100 * Q.i / Q.questions.length) + '%';
     $('#qText').textContent = q.q[lang()] || q.q.en;
+    $('#qTip').hidden = q.topic !== 'word';
+    const isMc = q.type === 'mc';
+    $('#choiceArea').hidden = !isMc;
+    $('#inputArea').hidden = isMc;
 
     const fb = $('#feedback');
     fb.textContent = Q.fbKey ? t(Q.fbKey) : '';
@@ -142,6 +178,7 @@
 
     const done = Q.status === 'done';
     $('#answer').disabled = done;
+    if (isMc) renderChoices(q, Q, done);
     document.querySelectorAll('.key').forEach(k => { k.disabled = done; });
     $('#checkBtn').hidden = done;
     $('#nextBtn').hidden = !done;
@@ -149,12 +186,19 @@
 
     const pa = $('#parentAnswer');
     pa.hidden = !(S.parent && done);
-    if (!pa.hidden) pa.textContent = t('quiz.parentAnswer', { a: q.answer });
+    if (!pa.hidden) pa.textContent = t('quiz.parentAnswer', { a: answerText(q) });
   }
 
   function submitAnswer() {
     const Q = S.quiz; if (!Q || Q.status === 'done') return;
     const q = Q.questions[Q.i];
+    if (q.type === 'mc') {   // one try for multiple choice
+      if (Q.sel === null) { Q.fbKey = 'quiz.pickFirst'; renderQuiz(); return; }
+      const ok = Q.sel === q.correct;
+      Q.results[Q.i] = { given: [Q.sel], ok, tries: 1 };
+      Q.status = 'done'; Q.fbKey = ok ? 'quiz.correct' : 'quiz.wrong';
+      renderQuiz(); $('#nextBtn').focus(); return;
+    }
     const input = $('#answer').value;
     const res = Checker.check(q, input);
     if (res.reason === 'empty' || res.reason === 'unreadable') {
@@ -181,7 +225,7 @@
   function nextQuestion() {
     const Q = S.quiz; if (!Q || Q.status !== 'done') return;
     if (Q.i + 1 >= Q.questions.length) { saveSession(); go('results'); return; }
-    Q.i += 1; Q.tries = 0; Q.given = []; Q.status = 'answering'; Q.fbKey = '';
+    Q.i += 1; Q.tries = 0; Q.given = []; Q.sel = null; Q.status = 'answering'; Q.fbKey = '';
     $('#answer').value = '';
     renderQuiz();
     focusAnswer();
@@ -210,11 +254,11 @@
       b[1] += 1; if (Q.results[i] && Q.results[i].ok) b[0] += 1;
     });
     const wrong = Q.questions.map((q, i) => (Q.results[i] && Q.results[i].ok ? null : {
-      topic: q.topic, q: q.q, answer: q.answer, sol: q.sol, given: (Q.results[i] && Q.results[i].given) || []
+      topic: q.topic, type: q.type, q: q.q, answer: q.answer, choices: q.choices, correct: q.correct, sol: q.sol, given: (Q.results[i] && Q.results[i].given) || []
     })).filter(Boolean);
     const h = store.get(K.history, []);
     h.push({
-      date: Date.now(), year: Q.settings.year, topic: Q.settings.topic, diff: Q.settings.diff,
+      date: Date.now(), subject: Q.settings.subject, year: Q.settings.year, topic: Q.settings.topic, diff: Q.settings.diff,
       n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong
     });
     store.set(K.history, h.slice(-100));
@@ -235,10 +279,9 @@
       const head = el('p', 'q');
       head.append(el('span', 'mark ' + (r.ok ? 'ok' : 'bad'), r.ok ? '✓ ' : '✗ '), document.createTextNode((i + 1) + '. ' + (q.q[lang()] || q.q.en)));
       li.append(head);
-      const given = r.given.length ? r.given.join(' → ') : t('res.blank');
-      li.append(el('p', 'muted', t('res.yours', { a: given }) + (r.ok && r.tries === 2 ? ' ' + t('res.second') : '')));
+      li.append(el('p', 'muted', t('res.yours', { a: givenText(q, r.given) }) + (r.ok && r.tries === 2 ? ' ' + t('res.second') : '')));
       if (S.parent) {
-        const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: q.answer }))); li.append(p);
+        const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: answerText(q) }))); li.append(p);
         const sol = q.sol && (q.sol[lang()] || q.sol.en);
         if (sol) li.append(el('p', 'muted small', t('res.solution', { s: sol })));
       }
@@ -273,7 +316,7 @@
     const ul = el('ul', 'plain');
     const fmtDate = d => new Date(d).toLocaleDateString(lang() === 'zh' ? 'zh-CN' : 'en-AU', { day: 'numeric', month: 'short' });
     h.slice(-8).reverse().forEach(x => ul.append(el('li', '', t('prog.row', {
-      date: fmtDate(x.date), year: t('home.yearN', { n: x.year }), topic: t('topic.' + x.topic), c: x.correct, n: x.n
+      date: fmtDate(x.date), year: t('home.yearN', { n: x.year }), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
     }))));
     box.append(ul);
 
@@ -285,9 +328,9 @@
       wrong.forEach(w => {
         const li = el('li', 'bad');
         li.append(el('p', 'q', w.q[lang()] || w.q.en));
-        li.append(el('p', 'muted', t('res.yours', { a: (w.given || []).join(' → ') || t('res.blank') })));
+        li.append(el('p', 'muted', t('res.yours', { a: givenText(w, w.given) })));
         if (S.parent) {
-          const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: w.answer }))); li.append(p);
+          const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: answerText(w) }))); li.append(p);
           const sol = w.sol && (w.sol[lang()] || w.sol.en);
           if (sol) li.append(el('p', 'muted small', t('res.solution', { s: sol })));
         }
@@ -459,7 +502,7 @@
     const d = currentDraft(), msg = $('#aiMsg'), btn = $('#aiTest');
     msg.className = 'small'; msg.textContent = t('parent.testing'); btn.disabled = true;
     try {
-      const qs = await AI.generateSet(d, 6, 'frac', 1, 1, topicNames(6));
+      const qs = await AI.generateSet(d, 'maths', 6, 'word', 2, 1, topicNames('maths', 6));
       msg.className = 'small ok';
       msg.textContent = t('parent.testOk') + ' “' + (qs[0].q[lang()] || qs[0].q.en) + '”';
     } catch (e) {

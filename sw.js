@@ -1,12 +1,15 @@
 /* Bump CACHE_VERSION on every release so phones pick up the new files. */
-const CACHE_VERSION = 'maths-v3';
+const CACHE_VERSION = 'maths-v4';
 const ASSETS = [
   './',
   './index.html',
   './css/style.css',
   './js/i18n.js',
   './js/checker.js',
-  './js/generator.js',
+  './js/gen-core.js',
+  './js/gen-maths.js',
+  './js/gen-word.js',
+  './js/gen-ga.js',
   './js/ai.js',
   './js/app.js',
   './manifest.webmanifest',
