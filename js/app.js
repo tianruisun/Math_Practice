@@ -15,18 +15,45 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
   };
-  const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai' };
+  const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai', profiles: 'mp.profiles' };
+
+  /* ---------- student profiles: up to 3 per browser, each with its own progress and settings ---------- */
+  const MAX_PROFILES = 3;
+  const Profiles = (() => {
+    let P = store.get(K.profiles, null);
+    if (!P || !Array.isArray(P.list) || !P.list.length) {
+      P = { list: [{ id: 'p1', name: '' }], active: 'p1' };
+      // move progress and settings from before profiles existed into the first student
+      const oldH = store.get(K.history, null), oldS = store.get(K.settings, null);
+      if (oldH && !store.get(K.history + '.p1', null)) store.set(K.history + '.p1', oldH);
+      if (oldS && !store.get(K.settings + '.p1', null)) store.set(K.settings + '.p1', oldS);
+      store.set(K.profiles, P);
+    }
+    if (!P.list.some(x => x.id === P.active)) P.active = P.list[0].id;
+    return {
+      get list() { return P.list; },
+      get active() { return P.list.find(x => x.id === P.active); },
+      name(pr) { return pr.name || t('profile.default', { n: P.list.indexOf(pr) + 1 }); },
+      histKey() { return K.history + '.' + P.active; },
+      setKey() { return K.settings + '.' + P.active; },
+      select(id) { P.active = id; store.set(K.profiles, P); },
+      add(name) { if (P.list.length >= MAX_PROFILES) return null; let n = 1; while (P.list.some(x => x.id === 'p' + n)) n++; const pr = { id: 'p' + n, name }; P.list.push(pr); P.active = pr.id; store.set(K.profiles, P); return pr; },
+      rename(id, name) { const pr = P.list.find(x => x.id === id); if (pr) { pr.name = name; store.set(K.profiles, P); } },
+      remove(id) { if (P.list.length <= 1) return false; P.list = P.list.filter(x => x.id !== id); store.del(K.history + '.' + id); store.del(K.settings + '.' + id); if (P.active === id) P.active = P.list[0].id; store.set(K.profiles, P); return true; }
+    };
+  })();
+  const histKey = () => Profiles.histKey();
 
   /* ---------- state ---------- */
   const YEARS = Gen.YEARS;   // 1–12, 13 = Year 12 Extension 1 (3U), 14 = Year 12 Extension 2 (4U)
   const yearLabel = y => (y >= 11 ? t('year.' + y) : t('home.yearN', { n: y }));
   const schoolOf = y => (y <= 6 ? 'primary' : 'high');
-  const COUNTS = [5, 10, 15, 20];
+  const COUNTS = [1, 5, 10, 15, 20];
   const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10, selLen: 'full', view: 'single' };
   const SUBJECTS = ['maths', 'ga', 'sel'];
   const S = {
     screen: 'home',
-    settings: Object.assign({}, defaults, store.get(K.settings, {})),
+    settings: Object.assign({}, defaults, store.get(Profiles.setKey(), {})),
     quiz: null,              // { questions, i, results:[{given:[], ok, tries}], tries, status, fbKey }
     parent: false,           // unlocked for this page session only
     loadingName: '',
@@ -52,6 +79,7 @@
     pb.setAttribute('aria-pressed', String(S.parent));
     $('#parentLabel').textContent = t(S.parent ? 'nav.parentOn' : 'nav.parent');
     $('#parentIcon').textContent = S.parent ? '🔓' : '🔒';
+    $('#profileName').textContent = Profiles.name(Profiles.active);
     ({ home: renderHome, loading: renderLoading, quiz: renderQuiz, results: renderResults, progress: renderProgress, parent: renderParent })[S.screen]();
   }
 
@@ -97,7 +125,7 @@
     return given.join(' → ');
   }
 
-  function saveSettings() { store.set(K.settings, S.settings); }
+  function saveSettings() { store.set(Profiles.setKey(), S.settings); }
 
   function renderHome() {
     const st = S.settings;
@@ -121,7 +149,14 @@
     combo($('#yearSel'), (school === 'primary' ? Gen.PRIMARY : Gen.HIGH).map(y => [y, yearLabel(y)]), st.year, v => { st.year = +v; saveSettings(); renderHome(); });
     combo($('#topicSel'), topicOptions(st.subject, st.year), st.topic, v => { st.topic = v; saveSettings(); });
     combo($('#diffSel'), [1, 2, 3, 4].map(d => [d, t('diff.' + d)]), st.diff, v => { st.diff = +v; saveSettings(); });
-    combo($('#countSel'), COUNTS.map(n => [n, String(n)]), st.count, v => { st.count = +v; saveSettings(); });
+    const isCustom = !COUNTS.includes(st.count);
+    combo($('#countSel'), [...COUNTS.map(n => [n, String(n)]), ['custom', t('home.countCustom')]], isCustom ? 'custom' : st.count, v => {
+      if (v === 'custom') { const c = $('#countCustom'); c.hidden = false; if (!c.value) c.value = st.count; c.focus(); c.select(); st.count = Math.max(1, Math.min(50, +c.value || st.count)); }
+      else { st.count = +v; $('#countCustom').hidden = true; }
+      saveSettings();
+    });
+    $('#countCustom').hidden = !isCustom;
+    if (isCustom) $('#countCustom').value = st.count;
     const ai = aiConfig();
     $('#sourceLine').textContent = ai ? t('home.source.ai', { name: AI.PROVIDERS[ai.provider].name }) : t('home.source.local');
   }
@@ -209,12 +244,11 @@
     $('#pageNav').hidden = v !== 'pages';
     $('#prevPage').disabled = Q.page === 0;
     $('#nextPage').disabled = Q.page >= pages - 1;
-    const showResultsBtn = !Q.exam && v === 'pages';
-    $('#toResults').hidden = !showResultsBtn;
-    $('#toResults').disabled = done < n;
-    $('#answerAll').hidden = !showResultsBtn || done === n;
-    $('#examNav').hidden = !Q.exam;
-    if (Q.exam) {
+    // practice and the timed test share the same navigation: move freely, finish at any time
+    $('#toResults').hidden = true; $('#answerAll').hidden = true;
+    $('#examNav').hidden = false;
+    $('#finishBtn').textContent = t(Q.exam ? 'sel.finish' : 'quiz.finish');
+    {
       $('#examSingleNav').hidden = v !== 'single';
       $('#prevQ').disabled = Q.i === 0;
       $('#nextQ').disabled = Q.i === n - 1;
@@ -222,13 +256,14 @@
       const pal = $('#palette'); pal.innerHTML = '';
       const onScreen = v === 'single' ? [Q.i] : range(Q.page * PAGE, (Q.page + 1) * PAGE);
       Q.questions.forEach((_, k) => {
-        const b = el('button', 'pal' + (Q.answers[k] !== null ? ' done' : '') + (onScreen.includes(k) ? ' current' : ''), String(k + 1));
+        const state = Q.exam ? (Q.answers[k] !== null ? ' done' : '') : Q.st[k].status === 'done' ? (Q.results[k] && Q.results[k].ok ? ' done good' : ' done wrong') : '';
+        const b = el('button', 'pal' + state + (onScreen.includes(k) ? ' current' : ''), String(k + 1));
         b.type = 'button';
         if (k === Q.i && v === 'single') b.setAttribute('aria-current', 'true');
         b.addEventListener('click', () => goToQuestion(k));
         pal.append(b);
       });
-      tickTimer();
+      if (Q.exam) tickTimer();
     }
   }
 
@@ -254,7 +289,7 @@
     card.setAttribute('aria-labelledby', 'qt' + i);
     const head = el('div', 'qhead');
     head.append(el('span', 'qnum', String(i + 1)), el('span', 'badge', t('topic.' + q.topic)));
-    const text = el('p', 'question', qText(q)); text.id = 'qt' + i;
+    const text = el('div', 'question'); text.innerHTML = Fig.questionHTML(qText(q)); text.id = 'qt' + i;
     card.append(head, text);
     if (q.fig && window.Fig) { const f = el('div', 'figwrap'); f.innerHTML = Fig.render(q.fig, lang()); card.append(f); }
     if (!Q.exam && q.topic === 'word') card.append(el('p', 'tip small', t('quiz.wordTip')));
@@ -267,7 +302,8 @@
         b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(selected === k));
         b.disabled = done || (Q.exam && Q.finished);
         if (done && S.parent && k === q.correct) b.classList.add('is-correct');
-        b.append(el('span', 'letter', 'ABCDE'[k]), el('span', 'ctext', c[lang()] || c.en));
+        const ct = el('span', 'ctext'); ct.innerHTML = Fig.math(c[lang()] || c.en);
+        b.append(el('span', 'letter', 'ABCDE'[k]), ct);
         b.addEventListener('click', () => {
           if (Q.exam) { if (Q.finished) return; Q.answers[i] = k; refreshCard(i); return; }
           if (st.status === 'done') return;
@@ -290,15 +326,7 @@
       inp.addEventListener('input', () => { st.draft = inp.value; });
       form.append(lab, inp);
       if (!done) {
-        const keys = el('div', 'keys'); keys.setAttribute('role', 'group'); keys.setAttribute('aria-label', 'Extra keys');
-        [['/', '/'], ['-', '−'], ['.', '.'], [' ', t('key.space')], ['back', '⌫']].forEach(([k, label]) => {
-          const b = el('button', 'key', label); b.type = 'button';
-          if (k === 'back') b.setAttribute('aria-label', 'Backspace');
-          b.addEventListener('mousedown', e => e.preventDefault());   // keep the keyboard open / caret in place
-          b.addEventListener('click', () => { insertKey(inp, k); st.draft = inp.value; });
-          keys.append(b);
-        });
-        form.append(keys, el('p', 'muted small', t('quiz.hint')));
+        form.append(el('p', 'muted small', t('quiz.hint')));
         const chk = el('button', 'btn primary', t('quiz.check')); chk.type = 'submit';
         form.append(chk);
       }
@@ -312,7 +340,7 @@
       card.append(fb);
       if (done && S.parent) card.append(el('p', 'parent-box', t('quiz.parentAnswer', { a: answerText(q) })));
       if (done && v === 'single') {
-        const last = Q.st.every(x => x.status === 'done');
+        const last = Q.st.every(x => x.status === 'done') || (Q.i === Q.questions.length - 1 && Q.st.slice(0, -1).every(x => x.status === 'done'));
         const nx = el('button', 'btn primary next', t(last ? 'quiz.finish' : 'quiz.next')); nx.type = 'button';
         nx.addEventListener('click', nextSingle);
         card.append(nx);
@@ -360,11 +388,14 @@
       const j = (Q.i + k) % n;
       if (Q.st[j].status !== 'done') { Q.i = j; renderQuiz(); window.scrollTo(0, 0); focusCardInput(j); return; }
     }
-    finishPractice();
+    finishPractice(true);
   }
-  function finishPractice() {
-    const Q = S.quiz;
-    if (!Q || Q.exam || Q.st.some(x => x.status !== 'done')) return;
+  /* finish a practice set at any time; unanswered questions count as wrong */
+  function finishPractice(confirmed) {
+    const Q = S.quiz; if (!Q || Q.exam) return;
+    const left = Q.st.filter(x => x.status !== 'done').length;
+    if (left && !confirmed && !confirm(t('quiz.finishConfirm', { n: left }))) return;
+    Q.st.forEach((x, i) => { if (x.status !== 'done') Q.results[i] = { given: x.given, ok: false, tries: x.tries }; });
     saveSession(); go('results');
   }
 
@@ -470,11 +501,11 @@
       <div class="p-fields"><span>${E(t('print.name'))}: <i></i></span><span>${E(t('print.date'))}: <i class="short"></i></span><span>${E(t('print.score'))}: <i class="short"></i> / ${n}</span></div></header>
       <p class="p-info">${E(meta.info)}</p><ol class="p-qs">`;
     questions.forEach(q => {
-      h += `<li class="p-q"><div class="p-text">${lines(qText(q))}</div>`;
+      h += `<li class="p-q"><div class="p-text">${Fig.questionHTML(qText(q))}</div>`;
       if (q.fig) h += Fig.render(q.fig, lang());
       if (q.type === 'mc') {
         const longOpt = q.choices.some(c => (c[lang()] || c.en).length > 18);
-        h += `<ol class="p-opts${longOpt ? ' one-col' : ''}">${q.choices.map((c, k) => `<li><b>${'ABCDE'[k]}</b> ${E(c[lang()] || c.en)}</li>`).join('')}</ol>`;
+        h += `<ol class="p-opts${longOpt ? ' one-col' : ''}">${q.choices.map((c, k) => `<li><b>${'ABCDE'[k]}</b> ${Fig.math(c[lang()] || c.en)}</li>`).join('')}</ol>`;
       } else {
         h += `<p class="p-line">${E(t('print.answerLine'))}: <i></i></p>`;
       }
@@ -542,12 +573,12 @@
     const wrong = Q.questions.map((q, i) => (Q.results[i] && Q.results[i].ok ? null : {
       topic: q.topic, type: q.type, q: q.q, fig: q.fig, answer: q.answer, choices: q.choices, correct: q.correct, sol: q.sol, given: (Q.results[i] && Q.results[i].given) || []
     })).filter(Boolean);
-    const h = store.get(K.history, []);
+    const h = store.get(histKey(), []);
     h.push({
       date: Date.now(), subject: Q.settings.subject, year: Q.settings.year, topic: Q.settings.topic, diff: Q.settings.diff,
       n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong, time: Q.timeUsed || null
     });
-    store.set(K.history, h.slice(-100));
+    store.set(histKey(), h.slice(-100));
   }
 
   /* ---------- RESULTS ---------- */
@@ -564,7 +595,8 @@
       const r = Q.results[i] || { given: [], ok: false, tries: 0 };
       const li = el('li', r.ok ? 'ok' : 'bad');
       const head = el('p', 'q');
-      head.append(el('span', 'mark ' + (r.ok ? 'ok' : 'bad'), r.ok ? '✓ ' : '✗ '), document.createTextNode((i + 1) + '. ' + (q.q[lang()] || q.q.en)));
+      const qt = el('span'); qt.innerHTML = Fig.questionHTML(q.q[lang()] || q.q.en);
+      head.append(el('span', 'mark ' + (r.ok ? 'ok' : 'bad'), r.ok ? '✓ ' : '✗ '), document.createTextNode((i + 1) + '. '), qt);
       li.append(head);
       appendFig(li, q);
       li.append(el('p', 'muted', t('res.yours', { a: givenText(q, r.given) }) + (r.ok && r.tries === 2 ? ' ' + t('res.second') : '')));
@@ -580,7 +612,8 @@
   /* ---------- PROGRESS ---------- */
   function renderProgress() {
     const box = $('#progBody'); box.innerHTML = '';
-    const h = store.get(K.history, []);
+    $('#progH').textContent = t('prog.headingFor', { name: Profiles.name(Profiles.active) });
+    const h = store.get(histKey(), []);
     if (!h.length) { box.append(el('p', 'muted', t('prog.none'))); return; }
     const total = h.reduce((s, x) => s + x.n, 0), correct = h.reduce((s, x) => s + x.correct, 0);
     const stats = el('div', 'stats');
@@ -615,7 +648,7 @@
       const ol = el('ol', 'review');
       wrong.forEach(w => {
         const li = el('li', 'bad');
-        li.append(el('p', 'q', w.q[lang()] || w.q.en));
+        const qp = el('div', 'q'); qp.innerHTML = Fig.questionHTML(w.q[lang()] || w.q.en); li.append(qp);
         appendFig(li, w);
         li.append(el('p', 'muted', t('res.yours', { a: givenText(w, w.given) })));
         if (S.parent) {
@@ -638,7 +671,7 @@
     const btn = el('button', 'btn secondary danger', '🗑 ' + t('prog.clear')); btn.type = 'button'; btn.id = 'clearProgress';
     btn.addEventListener('click', async () => {
       if (!S.parent && !(await unlockParent())) return;
-      if (confirm(t('prog.resetConfirm'))) { store.del(K.history); toast(t('prog.clear') + ' ✓'); renderProgress(); }
+      if (confirm(t('prog.resetConfirm'))) { store.del(histKey()); toast(t('prog.clear') + ' ✓'); renderProgress(); }
     });
     wrap.append(btn);
     if (!S.parent) wrap.append(el('p', 'muted small center', t('prog.clearNote')));
@@ -714,6 +747,7 @@
   /* ---------- PARENT: settings ---------- */
   let draftProvider = null;
   function renderParent() {
+    renderPrompt();
     const cfg = store.get(K.ai, { provider: 'local', key: '', model: '' });
     if (draftProvider === null) draftProvider = cfg.provider || 'local';
     chips($('#providerChips'), 'provider', ['local', 'claude', 'deepseek'].map(p => [p, t('parent.provider.' + p)]), draftProvider, v => {
@@ -732,6 +766,59 @@
   }
   function currentDraft() {
     return { provider: draftProvider, key: $('#aiKey').value.trim(), model: $('#aiModel').value };
+  }
+
+  /* AI prompt editor: pre-filled with the built-in template for each subject */
+  let promptSubject = 'maths';
+  function renderPrompt() {
+    const cfg = store.get(K.ai, {}) || {}, custom = cfg.prompts && cfg.prompts[promptSubject];
+    combo($('#promptSubject'), SUBJECTS.map(x => [x, t('subject.' + x)]), promptSubject, v => { promptSubject = v; renderPrompt(); });
+    $('#promptText').value = custom || AI.defaultTemplate(promptSubject);
+    $('#promptState').textContent = t(custom ? 'parent.promptCustom' : 'parent.promptDefault');
+  }
+  function savePrompt(text) {
+    const cfg = store.get(K.ai, { provider: 'local', key: '', model: '' }) || {};
+    cfg.prompts = Object.assign({}, cfg.prompts);
+    if (text && text.trim() && text.trim() !== AI.defaultTemplate(promptSubject).trim()) cfg.prompts[promptSubject] = text; else delete cfg.prompts[promptSubject];
+    store.set(K.ai, cfg);
+    renderPrompt();
+  }
+
+  /* ---------- student profiles dialog ---------- */
+  function renderProfiles() {
+    const ul = $('#profileList'); ul.innerHTML = '';
+    Profiles.list.forEach(pr => {
+      const li = el('li'), cur = pr === Profiles.active;
+      const pick = el('button', 'profile-pick', (cur ? '✓ ' : '') + Profiles.name(pr)); pick.type = 'button';
+      if (cur) pick.setAttribute('aria-current', 'true');
+      pick.addEventListener('click', () => switchProfile(pr.id));
+      const ren = el('button', 'icon-btn', '✎'); ren.type = 'button'; ren.setAttribute('aria-label', t('profile.rename'));
+      ren.addEventListener('click', () => { const v = prompt(t('profile.renamePrompt'), Profiles.name(pr)); if (v && v.trim()) { Profiles.rename(pr.id, v.trim().slice(0, 20)); renderProfiles(); render(); } });
+      const del = el('button', 'icon-btn', '🗑'); del.type = 'button'; del.setAttribute('aria-label', t('profile.delete'));
+      del.addEventListener('click', async () => {
+        if (Profiles.list.length <= 1) return toast(t('profile.lastOne'));
+        if (!S.parent && !(await unlockParent())) return;
+        if (!confirm(t('profile.deleteConfirm', { name: Profiles.name(pr) }))) return;
+        const wasActive = pr === Profiles.active;
+        Profiles.remove(pr.id);
+        if (wasActive) loadProfileSettings();
+        renderProfiles(); render();
+        if (!$('#profileDlg').open) $('#profileDlg').showModal();
+      });
+      li.append(pick, ren, del); ul.append(li);
+    });
+    const full = Profiles.list.length >= MAX_PROFILES;
+    $('#profileNew').disabled = full; $('#profileAddBtn').disabled = full;
+    $('#profileNew').placeholder = full ? t('profile.full') : t('profile.namePh');
+  }
+  function loadProfileSettings() {
+    S.settings = Object.assign({}, defaults, store.get(Profiles.setKey(), {}));
+  }
+  function switchProfile(id) {
+    if (S.screen === 'quiz' || S.screen === 'loading') return toast(t('profile.busy'));
+    Profiles.select(id); loadProfileSettings();
+    renderProfiles(); render();
+    toast(t('profile.switched', { name: Profiles.name(Profiles.active) }));
   }
 
   /* ---------- toast & SW updates ---------- */
@@ -792,7 +879,8 @@
   $('#printForm').addEventListener('submit', doPrint);
   $('#printCancel').addEventListener('click', () => $('#printDlg').close());
   $('#finishBtn').addEventListener('click', () => {
-    const Q = S.quiz; if (!Q || !Q.exam) return;
+    const Q = S.quiz; if (!Q) return;
+    if (!Q.exam) return finishPractice(false);
     const left = Q.answers.filter(a => a === null).length;
     if (confirm(left ? t('sel.finishConfirm', { n: left }) : t('sel.finishConfirm0'))) finishTest(false);
   });
@@ -803,10 +891,32 @@
   $('#changePin').addEventListener('click', async () => { if (await pinDialog('change')) toast(t('parent.saved')); });
   $('#aiKey').addEventListener('input', () => { $('#aiKey').dataset.touched = '1'; });
   $('#aiSave').addEventListener('click', () => {
-    const d = currentDraft();
-    store.set(K.ai, d.provider === 'local' ? { provider: 'local', key: '', model: '' } : d);
+    const d = currentDraft(), prompts = (store.get(K.ai, {}) || {}).prompts;   // keep any customised prompts
+    store.set(K.ai, Object.assign(d.provider === 'local' ? { provider: 'local', key: '', model: '' } : d, prompts ? { prompts } : {}));
     $('#aiMsg').className = 'small ok';
     $('#aiMsg').textContent = t('parent.saved');
+  });
+  $('#promptSave').addEventListener('click', () => { savePrompt($('#promptText').value); toast(t('parent.saved')); });
+  $('#promptReset').addEventListener('click', () => { savePrompt(''); toast(t('parent.promptDefault')); });
+  $('#profileBtn').addEventListener('click', () => { renderProfiles(); window.I18N.applyStatic($('#profileDlg')); $('#profileDlg').showModal(); });
+  $('#profileClose').addEventListener('click', () => $('#profileDlg').close());
+  $('#profileAdd').addEventListener('submit', e => {
+    e.preventDefault();
+    if (S.screen === 'quiz' || S.screen === 'loading') return toast(t('profile.busy'));
+    const name = $('#profileNew').value.trim().slice(0, 20);
+    const pr = Profiles.add(name);
+    if (!pr) return toast(t('profile.full'));
+    $('#profileNew').value = '';
+    loadProfileSettings(); renderProfiles(); render();
+    toast(t('profile.switched', { name: Profiles.name(pr) }));
+  });
+  $('#countCustom').addEventListener('input', () => {
+    const v = Math.round(+$('#countCustom').value);
+    if (v >= 1 && v <= 50) { S.settings.count = v; saveSettings(); }
+  });
+  $('#countCustom').addEventListener('change', () => {
+    const v = Math.max(1, Math.min(50, Math.round(+$('#countCustom').value) || 10));
+    $('#countCustom').value = v; S.settings.count = v; saveSettings();
   });
   $('#aiTest').addEventListener('click', async () => {
     const d = currentDraft(), msg = $('#aiMsg'), btn = $('#aiTest');

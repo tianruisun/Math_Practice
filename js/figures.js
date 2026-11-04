@@ -206,13 +206,44 @@
     return svg(340, f.note ? 230 : 215, b, 'triangle');
   }
 
+
+  /* ---------- maths formatting for question text ----------
+     a/b → stacked fraction, 2 1/3 → mixed number, x^2 / x^(n+1) → superscript.
+     Input is plain text; output is safe HTML. */
+  function math(s) {
+    let h = esc(s);
+    h = h.replace(/\^\(([^()]{1,24})\)/g, '<sup>$1</sup>').replace(/\^([−-]?[0-9a-zA-Zα-ω]{1,4})/g, '<sup>$1</sup>');
+    const frac = (n, d) => `<span class="frac"><span class="fn">${n}</span><span class="fd">${d}</span></span>`;
+    h = h.replace(/(^|[^\d./:,])(\d{1,4}) (\d{1,4})\/(\d{1,5})(?![\d/])/g, (m, pre, w, n, d) => `${pre}<span class="mixed">${w}${frac(n, d)}</span>`);
+    h = h.replace(/(^|[^\d./:,])(\d{1,5})\/(\d{1,5})(?![\d/])/g, (m, pre, n, d) => `${pre}${frac(n, d)}`);
+    return h;
+  }
+  /* Question text: "Work out …", "Solve for x: …", "计算：…" etc. get the expression in a formula block */
+  const LEAD = /^(Work out cleverly:|Work out|Evaluate|Solve for x:|Solve|Simplify|简便计算：|计算：|计算|解方程：|化简|求)\s*/;
+  const FORMULA_OK = /^[0-9a-zA-Z\s+×÷−\-=()\[\]^/√.,|⁰¹²³⁴⁵⁶⁷⁸⁹₀₁₂₃₄₅₆₇₈₉∫ΣπⁿαβγθωΔ□○△◆■●…·⌊⌋<>≤≥%°$′]+$/;
+  function looksLikeFormula(t) {
+    if (!t || !FORMULA_OK.test(t) || !/[0-9]/.test(t) || !/[=+×÷−\-^/√∫Σ]/.test(t)) return false;
+    const words = (t.match(/[A-Za-z]{3,}/g) || []).filter(w => !/^(log|sin|cos|tan|lim|cis)$/i.test(w));
+    return words.length === 0;
+  }
+  function questionHTML(text) {
+    return String(text).split('\n').map(line => {
+      const m = line.match(LEAD);
+      if (m) {
+        const rest = line.slice(m[0].length), cut = rest.search(/[.。](\s|$)|，|, (?=[A-Za-z])|；/), f = cut >= 0 ? rest.slice(0, cut) : rest, tail = cut >= 0 ? rest.slice(cut) : '';
+        if (looksLikeFormula(f.trim())) return `${m[1] ? `<span class="lead">${esc(m[1])}</span>` : ''}<span class="formula">${math(f.trim())}</span>${tail.replace(/^[.。]\s*$/, '') ? `<span class="tail">${math(tail.replace(/^[.。，,；]\s*/, ''))}</span>` : ''}`;
+      }
+      return math(line);
+    }).join('<br>');
+  }
+
   const R = { bar, line: lineGraph, dial, jug, clock, spinner, shape, grid, picto, table, pie, coord, triangle };
   function render(fig, lang) {
     if (!fig || !R[fig.type]) return '';
     try { return `<figure class="fig fig-${fig.type}">${R[fig.type](fig, lang || 'en')}</figure>`; }
     catch (e) { console.warn('figure failed', e); return ''; }
   }
-  const api = { render, esc };
+  const api = { render, esc, math, questionHTML };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.Fig = api;
 })(typeof window !== 'undefined' ? window : globalThis);

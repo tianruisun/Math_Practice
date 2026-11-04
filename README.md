@@ -17,6 +17,11 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 - **Wide difficulty spread:** Core and Standard follow the school level (China/Singapore standards); **Advanced** is tutoring-centre extension level and **Challenge** is olympiad level. Advanced/Challenge sets draw on a bank of competition problems for every school band (`js/gen-olympiad.js`) whose answers are computed by brute force, so they are always correct. AI questions are asked for the same levels.
 - **More charts:** Graphs & data and Geometry diagrams topics (Years 4–10), clock and picture-graph questions (Years 1–3), coordinate-grid and triangle diagrams (senior), and pie charts, coordinate grids and travel graphs in the Selective test.
 - **Clear progress** button on the Progress screen (protected by the parent PIN).
+- **Up to 3 student profiles** per device (👤 button in the header): each has its own progress and settings; deleting a profile needs the parent PIN.
+- **Move freely between questions** in both views (Previous / Next / question grid); finish at any time — unanswered questions count as wrong.
+- **Formulas look like maths:** stacked fractions, superscript powers, and the expression of “Work out / Solve / Evaluate” questions in a large formula box (on screen, in reviews and in print).
+- **Number of questions:** 1, 5, 10, 15, 20 or a custom number (1–50).
+- **Editable AI prompt:** Parent settings show the built-in prompt for Maths, General ability and the Selective test; parents can edit it (with {placeholders}) or reset it. Answer-format rules are always added so the app can read the reply. The default prompt asks for descriptive, real-world questions.
 - **Four difficulty levels:** Core 基础 · Standard 提高 · Advanced 拓展（培优）· Challenge 挑战（奥赛）.
 - **Screens:** Home (subject, year, topic or Mixed, difficulty, number of questions) → Quiz → Results, plus Progress and Parent settings.
 - **Bilingual:** English and Simplified Chinese. All interface text is in `js/i18n.js`. The 中文/EN button switches instantly, without reloading or losing the current question, the typed answer or the selected option. The choice is remembered.
@@ -30,7 +35,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 ## Publish on GitHub Pages
 1. Push to GitHub. In the repo: **Settings → Pages → Build and deployment → Deploy from a branch**, pick your branch and `/ (root)`.
 2. Open `https://<user>.github.io/<repo>/`. On a phone use **Add to Home Screen** / **Install app**.
-3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v8` → `maths-v9`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
+3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v9` → `maths-v10`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
 
 ## AI keys
 - Claude: create a key at console.anthropic.com. Default model `claude-opus-5-5`; `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper/faster options in settings.
