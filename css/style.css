@@ -297,3 +297,24 @@ dialog::backdrop { background: rgba(5, 15, 30, 0.7); }
   .tagline { font-size: 0.75rem; }
   .pill { padding: 0 0.6rem; font-size: 0.9rem; }
 }
+
+/* ---------- selective test ---------- */
+.chips-3 { grid-template-columns: repeat(3, 1fr); }
+.sel-card h3 { margin-bottom: 0.3rem; }
+.rules { margin: 0.3rem 0 0; padding-left: 1.2rem; }
+.rules li { margin: 0.2rem 0; }
+.timer {
+  margin: 0; font-weight: 900; font-variant-numeric: tabular-nums;
+  background: var(--ink); color: #fff; border-radius: 999px; padding: 0.2rem 0.75rem; font-size: 1rem;
+}
+.timer.low { background: var(--bad); }
+.answered { margin: 0.7rem 0 0; text-align: center; }
+.palette { display: grid; grid-template-columns: repeat(7, 1fr); gap: 0.35rem; }
+.pal {
+  min-height: 44px; border: 2px solid var(--line); border-radius: 10px;
+  background: var(--card); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer;
+}
+.pal.done { background: var(--pri-soft); border-color: var(--pri); color: var(--pri); }
+.pal.current { outline: 3px solid var(--focus); outline-offset: 1px; }
+.finish { margin-top: 1rem; }
+.res-cats { margin-top: 0.8rem; }

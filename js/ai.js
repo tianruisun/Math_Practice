@@ -212,7 +212,53 @@
     return out;
   }
 
-  const api = { PROVIDERS, generateSet, toQuestion, toMcQuestion, buildPrompt };
+
+  /* ---------- Selective test (NSW Selective High School Placement Test – Mathematical Reasoning style) ---------- */
+  const SEL_TOPICS = [['snum', 'Number & algebra'], ['smeas', 'Measurement & time'], ['sspace', 'Space & geometry'], ['sstat', 'Statistics & probability'], ['slogic', 'Problem solving']];
+  const SEL_TIER = {
+    1: 'EASIER questions, like questions 1–12 of the real paper: one or two steps (24-hour time, place value, simple measurement and capacity, multiples, simple symbol equations, number sentences, rounding).',
+    2: 'MEDIUM questions, like questions 13–25: two or three steps (probability from ratios, working backwards with money, "which statements are correct" about fractions or data, unit conversions, pairs of weights, LCM problems, Venn-style overlaps, fractions of a remainder).',
+    3: 'HARDER questions, like questions 26–35: non-routine reasoning (magic squares, time zones with flights, sequences defined by a rule, two-condition counting such as "multiples of 3 but not of 8", best-value buying, clock angles, quarter-turn directions, digit reversal, parity "which cannot be correct", HCF/LCM pairs, hidden cubes, timetables).'
+  };
+  function buildSelectivePrompt(tier, n) {
+    return [
+      `Write ${n} multiple-choice questions for a practice NSW Selective High School Placement Test – Mathematical Reasoning (for Year 6 students applying for Year 7).`,
+      `The real paper has 35 questions in 40 minutes, no calculator, five options A–E, and gets harder towards the end. Write ${SEL_TIER[tier]}`,
+      `Each question should take about 1 minute for a strong Year 6 student. Use topic keys: ${SEL_TOPICS.map(([k, v]) => `${k} (${v})`).join(', ')}; spread them out.`,
+      '', 'Rules:',
+      '- Exactly 5 options in choices_en and the same 5 options, in the same order, in choices_zh. correct_index is 0–4. Exactly one option is correct; the other four are answers students get from common mistakes.',
+      '- If the options are numbers or measurements, list them in increasing order. For "which statements are correct" questions, number the statements 1, 2, 3 in the question and use options like "statement 1 only", "statements 1 and 3 only", "none of them".',
+      '- No diagrams or pictures: everything must be in the text (small tables written as text lines are fine). Numbers must be workable without a calculator.',
+      '- Use realistic Australian contexts (dollars, metric units, 24-hour time). Use names, not "he/she".',
+      '- question_en in clear English; question_zh is the SAME question in natural Simplified Chinese (元 for dollars is fine).',
+      '- solution_en / solution_zh: a short worked solution in each language.',
+      '- Plain text only (no LaTeX/markdown). Never reveal the answer in the question. Double-check every answer.'
+    ].join('\n');
+  }
+
+  async function generateSelective(cfg, len) {
+    const counts = len === 'short' ? [6, 7, 5] : [12, 13, 10];
+    const allowed = SEL_TOPICS.map(([k]) => k);
+    const batches = await Promise.allSettled([1, 2, 3].map(async (tier, k) => {
+      const prompt = buildSelectivePrompt(tier, counts[k]);
+      const raw = cfg.provider === 'deepseek' ? await callDeepSeek(cfg, prompt, 'ga') : await callClaude(cfg, prompt, GA_SCHEMA, tier + 1);
+      const items = Array.isArray(raw) ? raw : raw && raw.questions;
+      if (!Array.isArray(items)) throw new Error('unexpected response');
+      const out = [], seen = new Set();
+      for (const item of items) {
+        const q = toMcQuestion(item, 6, tier, allowed, 'mixed');
+        if (!q || q.choices.length !== 5 || seen.has(q.q.en)) continue;
+        seen.add(q.q.en); q.subject = 'sel'; q.tier = tier; out.push(q);
+        if (out.length >= counts[k]) break;
+      }
+      return out;
+    }));
+    const qs = batches.filter(b => b.status === 'fulfilled').flatMap(b => b.value);
+    if (!qs.length) { const err = batches.find(b => b.status === 'rejected'); throw (err ? err.reason : new Error('no usable questions')); }
+    return qs;
+  }
+
+  const api = { PROVIDERS, generateSet, generateSelective, toQuestion, toMcQuestion, buildPrompt, buildSelectivePrompt };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AI = api;
 })(typeof window !== 'undefined' ? window : globalThis);

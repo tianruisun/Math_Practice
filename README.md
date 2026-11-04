@@ -8,6 +8,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
   - **Maths** – typed answers. Levels follow **China (人教版) and Singapore (MOE)** expectations for each year, which are noticeably harder than Australian/UK ones. 22 topics, including 简便计算 (clever calculation), 数论 (number theory), 找规律 (sequences), equations, simultaneous equations, quadratics, π = 3.14 circle/cylinder/cone work, and trigonometry.
   - **应用题 word problems**: classic types (和差, 和倍, 差倍, 鸡兔同笼, 植树, 年龄, 相遇/追及, 火车过桥, 工程, 盈亏, 浓度, 利润折扣, Singapore before/after fractions and transfer problems, equation and simultaneous-equation problems, quadratic area problems). About 1 in 3 questions in a Mixed maths set is a word problem; the worked solution shows the equation.
   - **General ability (综合能力)** – multiple choice: number series, letter series, codes, logical reasoning (ordering, calendars, truth-tellers, knights and knaves), symbol puzzles, visual patterns, spatial reasoning and counting. Puzzles avoid wordplay so both languages ask exactly the same question.
+  - **Selective test (选拔考试模拟)** – a timed practice paper in the style of the NSW Selective High School Placement Test – Mathematical Reasoning, modelled on the published practice tests: **35 questions in 40 minutes** (or a half test, 18 questions in 20 minutes), five options A–E, no calculator, easier → harder. Countdown timer, a grid to jump between questions, the ability to change answers, and automatic marking when time runs out. Results show the score, time used, time per question and a breakdown by area (number, measurement, space, statistics, problem solving). About 60 question types, randomised every time; questions that need a diagram in the real papers (nets, rotations, folding) are not included.
 - **Four difficulty levels:** Core 基础 · Standard 提高 · Advanced 拓展 · Challenge 挑战 (competition style).
 - **Screens:** Home (subject, year, topic or Mixed, difficulty, number of questions) → Quiz → Results, plus Progress and Parent settings.
 - **Bilingual:** English and Simplified Chinese. All interface text is in `js/i18n.js`. The 中文/EN button switches instantly, without reloading or losing the current question, the typed answer or the selected option. The choice is remembered.
@@ -21,7 +22,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 ## Publish on GitHub Pages
 1. Push to GitHub. In the repo: **Settings → Pages → Build and deployment → Deploy from a branch**, pick your branch and `/ (root)`.
 2. Open `https://<user>.github.io/<repo>/`. On a phone use **Add to Home Screen** / **Install app**.
-3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v5` → `maths-v6`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
+3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v6` → `maths-v7`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
 
 ## AI keys
 - Claude: create a key at console.anthropic.com. Default model `claude-opus-5-5`; `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper/faster options in settings.
@@ -39,6 +40,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 | `js/gen-maths.js` | Maths topics (China/Singapore levels) |
 | `js/gen-word.js` | 应用题 word problems |
 | `js/gen-ga.js` | General ability (multiple choice) |
+| `js/gen-selective.js` | Selective test (35 questions / 40 minutes, 5 options) |
 | `js/ai.js` | Claude / DeepSeek question generation (maths and general ability) and validation |
 | `js/app.js` | Screens, state, parent mode, progress |
 | `sw.js` | Service worker (bump `CACHE_VERSION` on release) |

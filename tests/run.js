@@ -59,6 +59,29 @@ for (const subject of ['maths', 'ga']) for (const y of [4, 5, 6, 7, 8, 9, 10]) f
     }
   }
 }
+
+/* Selective test: right length and shape, 5 distinct options, valid answers, easy → hard */
+const SEL = require('../js/gen-selective.js');
+for (let k = 0; k < 40; k++) {
+  for (const len of ['full', 'short']) {
+    const test = SEL.generateTest(len), n = len === 'full' ? 35 : 18;
+    t(`selective ${len} #${k} length`, () => assert.strictEqual(test.length, n));
+    t(`selective ${len} #${k} order`, () => { for (let i = 1; i < test.length; i++) assert.ok(test[i].tier >= test[i - 1].tier); });
+    t(`selective ${len} #${k} distinct questions`, () => assert.strictEqual(new Set(test.map(q => q.q.en)).size, n));
+    for (const q of test) {
+      gen++;
+      t(`selective q ${q.q.en.slice(0, 50)}`, () => {
+        assert.strictEqual(q.choices.length, 5);
+        assert.strictEqual(new Set(q.choices.map(c => c.en)).size, 5, 'duplicate options');
+        assert.strictEqual(new Set(q.choices.map(c => c.zh)).size, 5, 'duplicate zh options');
+        assert.ok(Number.isInteger(q.correct) && q.correct >= 0 && q.correct < 5);
+        assert.ok(['snum', 'smeas', 'sspace', 'sstat', 'slogic'].includes(q.topic));
+        for (const s of [q.q.en, q.q.zh, q.sol.en, q.sol.zh, ...q.choices.flatMap(c => [c.en, c.zh])]) assert.ok(s && !BAD.test(s), JSON.stringify(s));
+      });
+    }
+  }
+}
+t('selective timing', () => { assert.strictEqual(SEL.FULL.n, 35); assert.strictEqual(SEL.FULL.minutes, 40); assert.strictEqual(SEL.SHORT.n, 18); assert.strictEqual(SEL.SHORT.minutes, 20); });
 /* GA option count is normally 4 */
 t('ga mostly 4 options', () => {
   const qs = G.generateSet('ga', 8, 'mixed', 3, 200);
