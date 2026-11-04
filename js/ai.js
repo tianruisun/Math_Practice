@@ -56,41 +56,72 @@
     return 'a Year 12 student studying NSW HSC Mathematics Extension 2 (4 Unit)';
   }
 
-  function buildPrompt(subject, year, topic, diff, n, topicNames) {
-    const topicLine = topic === 'mixed'
-      ? `Mix these topics: ${topicNames.filter(([k]) => k !== 'olymp').map(([k, name]) => `${k} (${name})`).join(', ')}.`
-      : `Topic: ${topic} (${(topicNames.find(([k]) => k === topic) || [])[1] || topic}).`;
-    const common = [
-      `- question_en in clear English; question_zh is the SAME question in natural Simplified Chinese.`,
-      `- solution_en / solution_zh: a short worked solution in each language.`,
-      `- "topic" must be one of the topic keys given above.`,
-      `- Plain text only: × ÷ − ² ³ √ π ∫ Σ, fractions as a/b, powers as x^2. No LaTeX, no markdown.`,
-      `- Never reveal the answer in the question. Make questions varied. Check every answer carefully${diff >= 3 ? ' – solve each problem fully yourself before writing it, because these are hard' : ''}.`
-    ];
-    const level = diff >= 3
-      ? `Difficulty: ${DIFF_WORDS[diff]}. The difficulty must be obviously higher than ordinary school work for ${yearText(year)}${diff === 4 ? ' – think competition finalists' : ''}.`
-      : `Difficulty: ${DIFF_WORDS[diff]}.`;
-    if (subject === 'ga') {
-      return [
-        `Write ${n} General Ability (reasoning) multiple-choice questions for ${yearText(year)}, at the level of selective-school / gifted entrance tests (e.g. Singapore GEP, Australian OC/selective, Chinese 思维训练).`,
-        topicLine, level, '', 'Rules:',
-        '- Exactly 4 options in choices_en and the same 4 options, in the same order, in choices_zh. correct_index is 0–3. Exactly one option is correct; the others are plausible.',
-        '- Use reasoning that survives translation: number and letter series, codes, logical deduction, ordering, truth-tellers, symbol equations, patterns (emoji shapes allowed), directions, calendar, counting and spatial reasoning. Do NOT use synonyms, rhymes, spelling or other language-specific wordplay. Letters A–Z may be used in both languages.',
-        ...common
-      ].join('\n');
-    }
-    return [
-      `Write ${n} maths questions for ${yearText(year)}.` + (diff <= 2 ? ' Use the level of the same grade in mainland China (人教版) and Singapore (MOE), which is harder than Australian/UK expectations.' : ''),
-      topicLine, level,
-      topic === 'mixed' || topic === 'word'
-        ? (year >= 11 ? 'Include some applied (word) problems that need a model or equation.' : `At least ${topic === 'word' ? 'all' : 'a third'} of the questions must be word problems (应用题): a short situation the student must turn into a calculation or an equation (方程) and solve.`)
-        : 'Include some word problems where they fit the topic.',
-      '', 'Rules:',
+  /* ---------- editable prompt templates ----------
+     Parents can edit these in Parent settings. {placeholders} are filled in automatically.
+     The answer-format rules (FIXED_RULES) are always appended so the app can read the reply. */
+  const TEMPLATES = {
+    maths: [
+      'Write {count} maths questions for {student}.',
+      '{topics}',
+      'Difficulty: {difficulty}.',
+      '{levelNote}',
+      '{wordProblems}',
+      'Make each question descriptive: 2–4 sentences with a realistic context (people, places, objects, money, sport, science) where it suits the topic, rather than a bare calculation. Questions may be longer when that makes the problem clearer.',
+      'Make the questions varied. Solve every question yourself and check the answer before writing it.'
+    ].join('\n'),
+    ga: [
+      'Write {count} General Ability (reasoning) multiple-choice questions for {student}, at the level of selective-school / gifted entrance tests (Singapore GEP, Australian OC/selective, Chinese 思维训练).',
+      '{topics}',
+      'Difficulty: {difficulty}.',
+      '{levelNote}',
+      'Use reasoning that survives translation: number and letter series, codes, logical deduction, ordering, truth-tellers, symbol equations, patterns (emoji shapes allowed), directions, calendar, counting and spatial reasoning. Do NOT use synonyms, rhymes, spelling or other language-specific wordplay.',
+      'Describe each situation clearly in 2–4 sentences. Solve every question yourself before writing it.'
+    ].join('\n'),
+    sel: [
+      'Write {count} multiple-choice questions for a practice NSW Selective High School Placement Test – Mathematical Reasoning (Year 6 students applying for Year 7).',
+      'The real paper has 35 questions in 40 minutes, no calculator, five options A–E, and gets harder towards the end. Write {band}',
+      'Each question should take about 1 minute for a strong Year 6 student. Use realistic Australian contexts (dollars, metric units, 24-hour time) and describe each situation clearly. Use names, not "he/she".',
+      'For "which statements are correct" questions, number the statements 1, 2, 3 in the question and use options like "statement 1 only", "statements 1 and 3 only", "none of them".',
+      'Solve every question yourself and double-check the answer.'
+    ].join('\n')
+  };
+
+  const FIXED_RULES = {
+    common: [
+      '- question_en in clear English; question_zh is the SAME question in natural Simplified Chinese.',
+      '- solution_en / solution_zh: a short worked solution in each language.',
+      '- "topic" must be one of the topic keys given.',
+      '- Plain text only: × ÷ − ² ³ √ π ∫ Σ, fractions as a/b, mixed numbers as "2 1/3", powers as x^2. No LaTeX, no markdown.',
+      '- Never reveal the answer in the question.'
+    ],
+    maths: [
       '- Every answer must be a single number: integer, decimal, or fraction like 3/4 (negative allowed). No words, lists, coordinates, surds or expressions. If a problem has several unknowns, ask for just one. If the exact answer is irrational, ask for it to 2 decimal places.',
       '- Put the number ONLY in "answer" and the unit ONLY in "unit" (from the allowed list, "" if none). "$" for money (元 in Chinese), "%" for percentages, "°" for angles.',
-      '- For equation problems, show the equation in the solution (e.g. "Let x = …; 3x + 5 = 2x + 12; x = 7").',
-      ...common
-    ].join('\n');
+      '- For equation problems, show the equation in the solution (e.g. "Let x = …; 3x + 5 = 2x + 12; x = 7").'
+    ],
+    ga: ['- Exactly 4 options in choices_en and the same 4 options, in the same order, in choices_zh. correct_index is 0–3. Exactly one option is correct; the others are plausible. Letters A–Z may be used in both languages.'],
+    sel: [
+      '- Exactly 5 options in choices_en and the same 5 options, in the same order, in choices_zh. correct_index is 0–4. Exactly one is correct; the other four come from common mistakes.',
+      '- If the options are numbers or measurements, list them in increasing order. No diagrams: everything must be in the text (small tables written as text lines are fine). Numbers must be workable without a calculator.',
+      '- "topic" must be one of: snum, smeas, sspace, sstat, slogic.'
+    ]
+  };
+  const defaultTemplate = subject => TEMPLATES[subject];
+  const fill = (tpl, vars) => tpl.replace(/\{(\w+)\}/g, (m, k) => (vars[k] !== undefined ? vars[k] : m)).replace(/\n{2,}/g, '\n').trim();
+
+  function buildPrompt(subject, year, topic, diff, n, topicNames, custom) {
+    const topics = topic === 'mixed'
+      ? `Mix these topics: ${topicNames.filter(([k]) => k !== 'olymp').map(([k, name]) => `${k} (${name})`).join(', ')}.`
+      : `Topic: ${topic} (${(topicNames.find(([k]) => k === topic) || [])[1] || topic}).`;
+    const vars = {
+      count: n, student: yearText(year), topics, difficulty: DIFF_WORDS[diff],
+      levelNote: diff >= 3 ? `The difficulty must be obviously higher than ordinary school work for ${yearText(year)}${diff === 4 ? ' – think competition finalists' : ''}.` : (subject === 'maths' ? 'Use the level of the same grade in mainland China (人教版) and Singapore (MOE), which is harder than Australian/UK expectations.' : ''),
+      wordProblems: subject !== 'maths' ? '' : topic === 'mixed' || topic === 'word'
+        ? (year >= 11 ? 'Include some applied (word) problems that need a model or equation.' : `At least ${topic === 'word' ? 'all' : 'a third'} of the questions must be word problems (应用题): a situation the student must turn into a calculation or an equation (方程) and solve.`)
+        : 'Include some word problems where they fit the topic.'
+    };
+    const body = fill(custom && custom.trim() ? custom : TEMPLATES[subject], vars);
+    return `${body}\n\nRules (always follow):\n${[...FIXED_RULES.common, ...FIXED_RULES[subject]].join('\n')}`;
   }
 
   async function fetchWithTimeout(url, opts, ms) {
@@ -203,25 +234,27 @@
     };
   }
 
-  async function generateSet(cfg, subject, year, topic, diff, n, topicNames) {
+  async function oneBatch(cfg, subject, year, topic, diff, n, topicNames) {
     const allowed = topicNames.map(([k]) => k);
-    const prompt = buildPrompt(subject, year, topic, diff, n, topicNames);
+    const prompt = buildPrompt(subject, year, topic, diff, n, topicNames, cfg.prompts && cfg.prompts[subject]);
     const raw = cfg.provider === 'deepseek'
       ? await callDeepSeek(cfg, prompt, subject)
       : await callClaude(cfg, prompt, subject === 'ga' ? GA_SCHEMA : MATHS_SCHEMA, diff);
     const items = Array.isArray(raw) ? raw : raw && raw.questions;
     if (!Array.isArray(items)) throw new Error('unexpected response');
     const conv = subject === 'ga' ? toMcQuestion : toQuestion;
-    const seen = new Set(), out = [];
-    for (const item of items) {
-      const q = conv(item, year, diff, allowed, topic);
-      if (q && !seen.has(q.q.en)) { seen.add(q.q.en); out.push(q); }
-      if (out.length >= n) break;
-    }
-    if (!out.length) throw new Error('no usable questions');
-    return out;
+    return items.map(item => conv(item, year, diff, allowed, topic)).filter(Boolean);
   }
 
+  /* large sets are written in parallel batches of up to 12 */
+  async function generateSet(cfg, subject, year, topic, diff, n, topicNames) {
+    const sizes = []; for (let left = n; left > 0; left -= 12) sizes.push(Math.min(12, left));
+    const res = await Promise.allSettled(sizes.map(k => oneBatch(cfg, subject, year, topic, diff, k, topicNames)));
+    const seen = new Set(), out = [];
+    res.filter(r => r.status === 'fulfilled').flatMap(r => r.value).forEach(q => { if (!seen.has(q.q.en) && out.length < n) { seen.add(q.q.en); out.push(q); } });
+    if (!out.length) { const err = res.find(r => r.status === 'rejected'); throw (err ? err.reason : new Error('no usable questions')); }
+    return out;
+  }
 
   /* ---------- Selective test (NSW Selective High School Placement Test – Mathematical Reasoning style) ---------- */
   const SEL_TOPICS = [['snum', 'Number & algebra'], ['smeas', 'Measurement & time'], ['sspace', 'Space & geometry'], ['sstat', 'Statistics & probability'], ['slogic', 'Problem solving']];
@@ -230,27 +263,16 @@
     2: 'MEDIUM questions, like questions 13–25: two or three steps (probability from ratios, working backwards with money, "which statements are correct" about fractions or data, unit conversions, pairs of weights, LCM problems, Venn-style overlaps, fractions of a remainder).',
     3: 'HARDER questions, like questions 26–35: non-routine reasoning (magic squares, time zones with flights, sequences defined by a rule, two-condition counting such as "multiples of 3 but not of 8", best-value buying, clock angles, quarter-turn directions, digit reversal, parity "which cannot be correct", HCF/LCM pairs, hidden cubes, timetables).'
   };
-  function buildSelectivePrompt(tier, n) {
-    return [
-      `Write ${n} multiple-choice questions for a practice NSW Selective High School Placement Test – Mathematical Reasoning (for Year 6 students applying for Year 7).`,
-      `The real paper has 35 questions in 40 minutes, no calculator, five options A–E, and gets harder towards the end. Write ${SEL_TIER[tier]}`,
-      `Each question should take about 1 minute for a strong Year 6 student. Use topic keys: ${SEL_TOPICS.map(([k, v]) => `${k} (${v})`).join(', ')}; spread them out.`,
-      '', 'Rules:',
-      '- Exactly 5 options in choices_en and the same 5 options, in the same order, in choices_zh. correct_index is 0–4. Exactly one option is correct; the other four are answers students get from common mistakes.',
-      '- If the options are numbers or measurements, list them in increasing order. For "which statements are correct" questions, number the statements 1, 2, 3 in the question and use options like "statement 1 only", "statements 1 and 3 only", "none of them".',
-      '- No diagrams or pictures: everything must be in the text (small tables written as text lines are fine). Numbers must be workable without a calculator.',
-      '- Use realistic Australian contexts (dollars, metric units, 24-hour time). Use names, not "he/she".',
-      '- question_en in clear English; question_zh is the SAME question in natural Simplified Chinese (元 for dollars is fine).',
-      '- solution_en / solution_zh: a short worked solution in each language.',
-      '- Plain text only (no LaTeX/markdown). Never reveal the answer in the question. Double-check every answer.'
-    ].join('\n');
+  function buildSelectivePrompt(tier, n, custom) {
+    const body = fill(custom && custom.trim() ? custom : TEMPLATES.sel, { count: n, band: SEL_TIER[tier], topics: '', difficulty: '', student: 'a Year 6 student' });
+    return `${body}\nUse topic keys: ${SEL_TOPICS.map(([k, v]) => `${k} (${v})`).join(', ')}; spread them out.\n\nRules (always follow):\n${[...FIXED_RULES.common, ...FIXED_RULES.sel].join('\n')}`;
   }
 
   async function generateSelective(cfg, len) {
     const counts = len === 'short' ? [6, 7, 5] : [12, 13, 10];
     const allowed = SEL_TOPICS.map(([k]) => k);
     const batches = await Promise.allSettled([1, 2, 3].map(async (tier, k) => {
-      const prompt = buildSelectivePrompt(tier, counts[k]);
+      const prompt = buildSelectivePrompt(tier, counts[k], cfg.prompts && cfg.prompts.sel);
       const raw = cfg.provider === 'deepseek' ? await callDeepSeek(cfg, prompt, 'ga') : await callClaude(cfg, prompt, GA_SCHEMA, tier + 1);
       const items = Array.isArray(raw) ? raw : raw && raw.questions;
       if (!Array.isArray(items)) throw new Error('unexpected response');
@@ -268,7 +290,7 @@
     return qs;
   }
 
-  const api = { PROVIDERS, generateSet, generateSelective, toQuestion, toMcQuestion, buildPrompt, buildSelectivePrompt };
+  const api = { PROVIDERS, generateSet, generateSelective, toQuestion, toMcQuestion, buildPrompt, buildSelectivePrompt, defaultTemplate };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.AI = api;
 })(typeof window !== 'undefined' ? window : globalThis);

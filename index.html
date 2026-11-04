@@ -27,6 +27,7 @@
       </div>
     </div>
     <div class="top-actions">
+      <button type="button" id="profileBtn" class="pill profile-pill"><span aria-hidden="true">👤</span> <span id="profileName"></span></button>
       <button type="button" id="langBtn" class="pill" data-i18n="lang.switch" data-i18n-aria="lang.label">中文</button>
       <button type="button" id="parentBtn" class="pill" aria-pressed="false"><span id="parentIcon" aria-hidden="true">🔒</span> <span id="parentLabel" data-i18n="nav.parent">Parent</span></button>
     </div>
@@ -71,6 +72,7 @@
         <div class="field">
           <label class="label" for="countSel" data-i18n="home.count">Number of questions</label>
           <select id="countSel" class="combo"></select>
+          <input type="number" id="countCustom" class="combo-num" min="1" max="50" inputmode="numeric" data-i18n-aria="home.countCustomLabel" data-i18n-placeholder="home.countCustomLabel" hidden>
         </div>
       </div>
 
@@ -189,6 +191,21 @@
       </div>
 
       <div class="card">
+        <h3 data-i18n="parent.promptHeading">AI prompt</h3>
+        <p class="muted small" data-i18n="parent.promptInfo"></p>
+        <div class="field">
+          <label class="label" for="promptSubject" data-i18n="parent.promptFor">Prompt for</label>
+          <select id="promptSubject" class="combo"></select>
+        </div>
+        <textarea id="promptText" class="prompt-text" rows="12" spellcheck="false"></textarea>
+        <p class="muted small" id="promptState"></p>
+        <div class="row">
+          <button type="button" id="promptReset" class="btn secondary" data-i18n="parent.promptReset">Reset to default</button>
+          <button type="button" id="promptSave" class="btn primary" data-i18n="parent.promptSave">Save prompt</button>
+        </div>
+      </div>
+
+      <div class="card">
         <h3 data-i18n="parent.pinHeading">Parent PIN</h3>
         <p class="muted small" data-i18n="pin.note"></p>
         <button type="button" id="changePin" class="btn secondary" data-i18n="parent.changePin">Change PIN</button>
@@ -209,6 +226,17 @@
       </div>
       <button type="button" id="pinForgot" class="link small" data-i18n="pin.forgot">Forgot PIN?</button>
     </form>
+  </dialog>
+
+  <dialog id="profileDlg" aria-labelledby="profileTitle">
+    <h3 id="profileTitle" data-i18n="profile.title">Students</h3>
+    <p class="muted small" data-i18n="profile.max"></p>
+    <ul id="profileList" class="profile-list"></ul>
+    <form id="profileAdd" class="row profile-add">
+      <input type="text" id="profileNew" maxlength="20" autocomplete="off" data-i18n-placeholder="profile.namePh">
+      <button type="submit" class="btn primary" id="profileAddBtn" data-i18n="profile.add">Add</button>
+    </form>
+    <button type="button" id="profileClose" class="btn ghost" data-i18n="profile.close">Done</button>
   </dialog>
 
   <dialog id="printDlg" aria-labelledby="printTitle">

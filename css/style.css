@@ -404,3 +404,37 @@ select.combo:focus { border-color: var(--pri); }
 .btn.danger { background: var(--bad-soft); color: var(--bad); }
 .review li.bad, .review li.ok { color: var(--ink); }
 .small-fig .fig-svg { max-width: 300px; }
+
+/* ---------- formulas ---------- */
+.frac { display: inline-flex; flex-direction: column; align-items: center; vertical-align: middle; margin: 0 0.12em; font-size: 0.85em; line-height: 1.1; }
+.frac .fn { border-bottom: 2px solid currentColor; padding: 0 0.15em; }
+.frac .fd { padding: 0 0.15em; }
+.mixed { white-space: nowrap; }
+sup { font-size: 0.7em; line-height: 0; }
+.formula { display: block; margin: 0.55rem 0 0.35rem; padding: 0.7rem 0.9rem; text-align: center; font-size: 1.3em; font-weight: 800; letter-spacing: 0.02em;
+  background: var(--surface-2); border: 1.5px solid var(--hair); border-radius: var(--radius-sm); overflow-x: auto; white-space: nowrap; }
+.lead { display: block; }
+.tail { display: block; font-size: 0.85em; font-weight: 600; color: var(--muted); }
+@media print { .formula { background: none; border: 0; text-align: left; padding: 1mm 0 1mm 4mm; font-size: 1.15em; white-space: normal; } .tail { color: #000; } }
+
+/* ---------- profiles, custom count, prompt editor, practice palette ---------- */
+.profile-pill { max-width: 9.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 400px) { .profile-pill { max-width: 6.5rem; } #profileName { display: inline-block; max-width: 3.6rem; overflow: hidden; text-overflow: ellipsis; vertical-align: bottom; } }
+.profile-list { list-style: none; padding: 0; margin: 0.6rem 0; display: grid; gap: 0.5rem; }
+.profile-list li { display: flex; gap: 0.4rem; align-items: center; }
+.profile-pick { flex: 1; min-height: 52px; text-align: left; padding: 0 0.9rem; border-radius: var(--radius-sm); border: 1.5px solid var(--hair); background: var(--surface-2); color: var(--ink); font: inherit; font-weight: 800; cursor: pointer; }
+.profile-pick[aria-current="true"] { background: var(--pri); color: var(--pri-ink); border-color: var(--pri); }
+.icon-btn { min-width: 44px; min-height: 44px; border-radius: 12px; border: 1.5px solid var(--hair); background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; }
+.profile-add { align-items: center; }
+.profile-add input { flex: 2; }
+.profile-add .btn { margin-top: 0; flex: 1; }
+.combo-num { width: 100%; min-height: 52px; margin-top: 0.5rem; padding: 0.55rem 0.9rem; font: inherit; font-weight: 700; color: var(--ink); background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--radius-sm); }
+.prompt-text { width: 100%; min-height: 14rem; padding: 0.7rem 0.8rem; font: 0.9rem/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: var(--ink); background: var(--surface-2); border: 1.5px solid var(--hair); border-radius: var(--radius-sm); resize: vertical; }
+.pal.good { background: var(--ok-soft); border-color: var(--ok); color: var(--ok); }
+.pal.wrong { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
+/* header with four buttons: brand keeps its width; buttons wrap onto a second row on phones */
+.top { flex-wrap: wrap; row-gap: 0.55rem; }
+.brand { flex: 1 1 auto; min-width: 12rem; }
+.top-actions { margin-left: auto; flex-wrap: nowrap; }
+@media (max-width: 560px) { .top-actions { width: 100%; justify-content: flex-end; } }
+@media (max-width: 400px) { .profile-pill { max-width: 9rem; } #profileName { display: inline; max-width: none; } }
