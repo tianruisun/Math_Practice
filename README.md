@@ -9,6 +9,10 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
   - **应用题 word problems**: classic types (和差, 和倍, 差倍, 鸡兔同笼, 植树, 年龄, 相遇/追及, 火车过桥, 工程, 盈亏, 浓度, 利润折扣, Singapore before/after fractions and transfer problems, equation and simultaneous-equation problems, quadratic area problems). About 1 in 3 questions in a Mixed maths set is a word problem; the worked solution shows the equation.
   - **General ability (综合能力)** – multiple choice: number series, letter series, codes, logical reasoning (ordering, calendars, truth-tellers, knights and knaves), symbol puzzles, visual patterns, spatial reasoning and counting. Puzzles avoid wordplay so both languages ask exactly the same question.
   - **Selective test (选拔考试模拟)** – a timed practice paper in the style of the NSW Selective High School Placement Test – Mathematical Reasoning, modelled on the published practice tests: **35 questions in 40 minutes** (or a half test, 18 questions in 20 minutes), five options A–E, no calculator, easier → harder. Countdown timer, a grid to jump between questions, the ability to change answers, and automatic marking when time runs out. Results show the score, time used, time per question and a breakdown by area (number, measurement, space, statistics, problem solving). About 60 question types, randomised every time; questions that need a diagram in the real papers (nets, rotations, folding) are not included.
+- **Charts and diagrams:** Selective-test questions include column graphs, line graphs, pictographs, scale dials, measuring jugs, clocks, spinners, labelled shapes, square-grid shapes and magic-square tables, drawn as crisp SVG with labels in both languages (`js/figures.js`).
+- **Two views:** answer **one question at a time**, or switch to **Pages** to see five questions per screen (works for practice sets and the timed test).
+- **Print on A4:** a Print button (on Home, in a quiz and on Results) lays the questions out as an A4 worksheet with name/date/score fields, figures and A–E options or answer lines. Optionally adds an **answer key with worked solutions on a separate page** (needs the parent PIN). Use the browser's print window to print or “Save as PDF”.
+- **Modern look** with automatic dark mode.
 - **Four difficulty levels:** Core 基础 · Standard 提高 · Advanced 拓展 · Challenge 挑战 (competition style).
 - **Screens:** Home (subject, year, topic or Mixed, difficulty, number of questions) → Quiz → Results, plus Progress and Parent settings.
 - **Bilingual:** English and Simplified Chinese. All interface text is in `js/i18n.js`. The 中文/EN button switches instantly, without reloading or losing the current question, the typed answer or the selected option. The choice is remembered.
@@ -22,7 +26,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 ## Publish on GitHub Pages
 1. Push to GitHub. In the repo: **Settings → Pages → Build and deployment → Deploy from a branch**, pick your branch and `/ (root)`.
 2. Open `https://<user>.github.io/<repo>/`. On a phone use **Add to Home Screen** / **Install app**.
-3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v6` → `maths-v7`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
+3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v7` → `maths-v8`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
 
 ## AI keys
 - Claude: create a key at console.anthropic.com. Default model `claude-opus-5-5`; `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper/faster options in settings.
@@ -40,6 +44,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 | `js/gen-maths.js` | Maths topics (China/Singapore levels) |
 | `js/gen-word.js` | 应用题 word problems |
 | `js/gen-ga.js` | General ability (multiple choice) |
+| `js/figures.js` | Charts and diagrams (SVG/HTML) for questions |
 | `js/gen-selective.js` | Selective test (35 questions / 40 minutes, 5 options) |
 | `js/ai.js` | Claude / DeepSeek question generation (maths and general ability) and validation |
 | `js/app.js` | Screens, state, parent mode, progress |

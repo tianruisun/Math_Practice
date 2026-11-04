@@ -20,7 +20,7 @@
   /* ---------- state ---------- */
   const YEARS = [4, 5, 6, 7, 8, 9, 10];
   const COUNTS = [5, 10, 15, 20];
-  const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10, selLen: 'full' };
+  const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10, selLen: 'full', view: 'single' };
   const SUBJECTS = ['maths', 'ga', 'sel'];
   const S = {
     screen: 'home',
@@ -139,110 +139,224 @@
       }
     }
     if (!questions) questions = Gen.generateSet(subject, year, topic, diff, count);
-    S.quiz = { questions, i: 0, results: [], tries: 0, sel: null, status: 'answering', fbKey: '', settings: Object.assign({ subject }, settings) };
-    $('#answer').value = '';
+    S.quiz = {
+      exam: false, questions, i: 0, page: 0, results: [],
+      st: questions.map(() => ({ status: 'answering', tries: 0, given: [], sel: null, fbKey: '', draft: '' })),
+      settings: Object.assign({ subject }, settings)
+    };
     go('quiz');
-    focusAnswer();
+    focusCardInput(0);
   }
 
   function renderLoading() {
     $('#loadingText').textContent = t(S.loadingKey || 'loading.ai', { name: S.loadingName });
   }
 
-  /* ---------- QUIZ ---------- */
-  function focusAnswer() {
-    const Q = S.quiz; if (Q && Q.questions[Q.i] && Q.questions[Q.i].type === 'mc') return;
-    setTimeout(() => { const a = $('#answer'); if (!a.disabled) a.focus({ preventScroll: true }); }, 50);
-  }
+  /* ---------- QUIZ: question cards, one at a time or in pages ---------- */
+  const PAGE = 5;
+  const view = () => (S.settings.view === 'pages' ? 'pages' : 'single');
+  const range = (a, b) => Array.from({ length: Math.max(0, b - a) }, (_, k) => a + k);
+  const qText = q => q.q[lang()] || q.q.en;
+  const doneCount = Q => (Q.exam ? Q.answers.filter(a => a !== null).length : Q.st.filter(x => x.status === 'done').length);
 
-  function renderChoices(q, Q, done) {
-    const box = $('#choices'); box.innerHTML = '';
-    q.choices.forEach((c, i) => {
-      const b = el('button', 'choice'); b.type = 'button';
-      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(Q.sel === i));
-      b.disabled = done;
-      if (done && S.parent && i === q.correct) b.classList.add('is-correct');
-      b.append(el('span', 'letter', 'ABCDE'[i]), el('span', '', c[lang()] || c.en));
-      b.addEventListener('click', () => { if (Q.status === 'done') return; Q.sel = i; Q.fbKey = ''; renderQuiz(); });
-      box.append(b);
-    });
+  function focusCardInput(i) {
+    setTimeout(() => { const inp = document.querySelector(`#qc${i} input.answer`); if (inp && !inp.disabled) inp.focus({ preventScroll: true }); }, 60);
+  }
+  function scrollToCard(i) {
+    const c = $('#qc' + i);
+    if (c && c.scrollIntoView) c.scrollIntoView({ block: 'start', behavior: 'smooth' }); else window.scrollTo(0, 0);
   }
 
   function renderQuiz() {
     const Q = S.quiz; if (!Q) return go('home');
-    if (Q.exam) return renderExam();
-    $('#timer').hidden = true; $('#examNav').hidden = true;
-    const q = Q.questions[Q.i];
-    $('#qProgress').textContent = t('quiz.progress', { i: Q.i + 1, n: Q.questions.length });
-    $('#qTopic').textContent = t('topic.' + q.topic);
-    $('#qBar').style.width = (100 * Q.i / Q.questions.length) + '%';
-    $('#qText').textContent = q.q[lang()] || q.q.en;
-    $('#qTip').hidden = q.topic !== 'word';
-    const isMc = q.type === 'mc';
-    $('#choiceArea').hidden = !isMc;
-    $('#inputArea').hidden = isMc;
-
-    const fb = $('#feedback');
-    fb.textContent = Q.fbKey ? t(Q.fbKey) : '';
-    fb.className = 'feedback' + (Q.fbKey ? (Q.status === 'done' && Q.results[Q.i] && Q.results[Q.i].ok ? ' ok' : ' bad') : '');
-
-    const done = Q.status === 'done';
-    $('#answer').disabled = done;
-    if (isMc) renderChoices(q, Q, done);
-    document.querySelectorAll('.key').forEach(k => { k.disabled = done; });
-    $('#checkBtn').hidden = done;
-    $('#nextBtn').hidden = !done;
-    $('#nextBtn').textContent = t(Q.i + 1 < Q.questions.length ? 'quiz.next' : 'quiz.finish');
-
-    const pa = $('#parentAnswer');
-    pa.hidden = !(S.parent && done);
-    if (!pa.hidden) pa.textContent = t('quiz.parentAnswer', { a: answerText(q) });
+    const n = Q.questions.length, pages = Math.ceil(n / PAGE), v = view();
+    if (Q.page >= pages) Q.page = pages - 1;
+    const list = $('#qList'); list.innerHTML = '';
+    const idx = v === 'single' ? [Q.i] : range(Q.page * PAGE, Math.min(n, (Q.page + 1) * PAGE));
+    idx.forEach(i => list.append(cardEl(i)));
+    renderChrome();
   }
 
-  function submitAnswer() {
-    const Q = S.quiz; if (!Q || Q.status === 'done') return;
-    const q = Q.questions[Q.i];
-    if (q.type === 'mc') {   // one try for multiple choice
-      if (Q.sel === null) { Q.fbKey = 'quiz.pickFirst'; renderQuiz(); return; }
-      const ok = Q.sel === q.correct;
-      Q.results[Q.i] = { given: [Q.sel], ok, tries: 1 };
-      Q.status = 'done'; Q.fbKey = ok ? 'quiz.correct' : 'quiz.wrong';
-      renderQuiz(); $('#nextBtn').focus(); return;
+  /* header, progress, navigation — everything except the cards themselves */
+  function renderChrome() {
+    const Q = S.quiz, n = Q.questions.length, pages = Math.ceil(n / PAGE), v = view(), done = doneCount(Q);
+    $('#qProgress').textContent = v === 'single' ? t('quiz.progress', { i: Q.i + 1, n }) : t('view.pageOf', { p: Q.page + 1, n: pages });
+    $('#qBar').style.width = (100 * done / n) + '%';
+    $('#viewSingle').setAttribute('aria-pressed', String(v === 'single'));
+    $('#viewPages').setAttribute('aria-pressed', String(v === 'pages'));
+    $('#timer').hidden = !Q.exam;
+    $('#pageNav').hidden = v !== 'pages';
+    $('#prevPage').disabled = Q.page === 0;
+    $('#nextPage').disabled = Q.page >= pages - 1;
+    const showResultsBtn = !Q.exam && v === 'pages';
+    $('#toResults').hidden = !showResultsBtn;
+    $('#toResults').disabled = done < n;
+    $('#answerAll').hidden = !showResultsBtn || done === n;
+    $('#examNav').hidden = !Q.exam;
+    if (Q.exam) {
+      $('#examSingleNav').hidden = v !== 'single';
+      $('#prevQ').disabled = Q.i === 0;
+      $('#nextQ').disabled = Q.i === n - 1;
+      $('#answeredCount').textContent = t('sel.answered', { a: done, n });
+      const pal = $('#palette'); pal.innerHTML = '';
+      const onScreen = v === 'single' ? [Q.i] : range(Q.page * PAGE, (Q.page + 1) * PAGE);
+      Q.questions.forEach((_, k) => {
+        const b = el('button', 'pal' + (Q.answers[k] !== null ? ' done' : '') + (onScreen.includes(k) ? ' current' : ''), String(k + 1));
+        b.type = 'button';
+        if (k === Q.i && v === 'single') b.setAttribute('aria-current', 'true');
+        b.addEventListener('click', () => goToQuestion(k));
+        pal.append(b);
+      });
+      tickTimer();
     }
-    const input = $('#answer').value;
-    const res = Checker.check(q, input);
-    if (res.reason === 'empty' || res.reason === 'unreadable') {
-      Q.fbKey = res.reason === 'empty' ? 'quiz.empty' : 'quiz.unread';
-      Q.status = 'answering';
-      renderQuiz(); focusAnswer(); return;
-    }
-    Q.tries += 1;
-    Q.given = (Q.given || []).concat(input.trim());
-    if (res.ok || Q.tries >= 2) {
-      Q.results[Q.i] = { given: Q.given, ok: res.ok, tries: Q.tries };
-      Q.status = 'done';
-      Q.fbKey = res.ok ? (Q.tries === 1 ? 'quiz.correct' : 'quiz.correct2') : 'quiz.wrong';
-      renderQuiz();
-      $('#nextBtn').focus();
+  }
+
+  function goToQuestion(k) {
+    const Q = S.quiz;
+    Q.i = k;
+    if (view() === 'pages') { const p = Math.floor(k / PAGE); if (p !== Q.page) { Q.page = p; renderQuiz(); } scrollToCard(k); }
+    else { renderQuiz(); window.scrollTo(0, 0); }
+  }
+
+  function refreshCard(i) {
+    const old = $('#qc' + i);
+    if (old) old.replaceWith(cardEl(i));
+    renderChrome();
+  }
+
+  /* one question card */
+  function cardEl(i) {
+    const Q = S.quiz, q = Q.questions[i], st = Q.exam ? null : Q.st[i], v = view();
+    const done = !Q.exam && st.status === 'done';
+    const card = el('article', 'qcard' + (done ? (Q.results[i] && Q.results[i].ok ? ' is-ok' : ' is-bad') : ''));
+    card.id = 'qc' + i;
+    card.setAttribute('aria-labelledby', 'qt' + i);
+    const head = el('div', 'qhead');
+    head.append(el('span', 'qnum', String(i + 1)), el('span', 'badge', t('topic.' + q.topic)));
+    const text = el('p', 'question', qText(q)); text.id = 'qt' + i;
+    card.append(head, text);
+    if (q.fig && window.Fig) { const f = el('div', 'figwrap'); f.innerHTML = Fig.render(q.fig, lang()); card.append(f); }
+    if (!Q.exam && q.topic === 'word') card.append(el('p', 'tip small', t('quiz.wordTip')));
+
+    if (q.type === 'mc') {
+      const box = el('div', 'choices'); box.setAttribute('role', 'radiogroup'); box.setAttribute('aria-labelledby', 'qt' + i);
+      const selected = Q.exam ? Q.answers[i] : st.sel;
+      q.choices.forEach((c, k) => {
+        const b = el('button', 'choice'); b.type = 'button';
+        b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(selected === k));
+        b.disabled = done || (Q.exam && Q.finished);
+        if (done && S.parent && k === q.correct) b.classList.add('is-correct');
+        b.append(el('span', 'letter', 'ABCDE'[k]), el('span', 'ctext', c[lang()] || c.en));
+        b.addEventListener('click', () => {
+          if (Q.exam) { if (Q.finished) return; Q.answers[i] = k; refreshCard(i); return; }
+          if (st.status === 'done') return;
+          st.sel = k; st.fbKey = ''; refreshCard(i);
+        });
+        box.append(b);
+      });
+      card.append(box);
+      if (!Q.exam && !done) {
+        const chk = el('button', 'btn primary', t('quiz.check')); chk.type = 'button';
+        chk.addEventListener('click', () => submitCard(i));
+        card.append(chk);
+      }
     } else {
-      Q.status = 'retry';
-      Q.fbKey = 'quiz.retry';
-      renderQuiz();
-      const a = $('#answer'); a.select(); focusAnswer();
+      const form = el('form', 'answer-form'); form.noValidate = true; form.autocomplete = 'off';
+      const lab = el('label', 'label', t('quiz.label')); lab.htmlFor = 'ans' + i;
+      const inp = el('input', 'answer'); inp.id = 'ans' + i; inp.type = 'text';
+      Object.assign(inp, { inputMode: 'text', autocomplete: 'off', spellcheck: false, placeholder: t('quiz.placeholder'), value: st.draft, disabled: done });
+      inp.setAttribute('autocorrect', 'off'); inp.setAttribute('autocapitalize', 'off'); inp.setAttribute('enterkeyhint', 'done');
+      inp.addEventListener('input', () => { st.draft = inp.value; });
+      form.append(lab, inp);
+      if (!done) {
+        const keys = el('div', 'keys'); keys.setAttribute('role', 'group'); keys.setAttribute('aria-label', 'Extra keys');
+        [['/', '/'], ['-', '−'], ['.', '.'], [' ', t('key.space')], ['back', '⌫']].forEach(([k, label]) => {
+          const b = el('button', 'key', label); b.type = 'button';
+          if (k === 'back') b.setAttribute('aria-label', 'Backspace');
+          b.addEventListener('mousedown', e => e.preventDefault());   // keep the keyboard open / caret in place
+          b.addEventListener('click', () => { insertKey(inp, k); st.draft = inp.value; });
+          keys.append(b);
+        });
+        form.append(keys, el('p', 'muted small', t('quiz.hint')));
+        const chk = el('button', 'btn primary', t('quiz.check')); chk.type = 'submit';
+        form.append(chk);
+      }
+      form.addEventListener('submit', e => { e.preventDefault(); submitCard(i); });
+      card.append(form);
     }
+
+    if (!Q.exam) {
+      const fb = el('p', 'feedback' + (st.fbKey ? (done && Q.results[i] && Q.results[i].ok ? ' ok' : ' bad') : ''), st.fbKey ? t(st.fbKey) : '');
+      fb.setAttribute('role', 'status');
+      card.append(fb);
+      if (done && S.parent) card.append(el('p', 'parent-box', t('quiz.parentAnswer', { a: answerText(q) })));
+      if (done && v === 'single') {
+        const last = Q.st.every(x => x.status === 'done');
+        const nx = el('button', 'btn primary next', t(last ? 'quiz.finish' : 'quiz.next')); nx.type = 'button';
+        nx.addEventListener('click', nextSingle);
+        card.append(nx);
+      }
+    }
+    return card;
   }
 
-  function nextQuestion() {
-    const Q = S.quiz; if (!Q || Q.status !== 'done') return;
-    if (Q.i + 1 >= Q.questions.length) { saveSession(); go('results'); return; }
-    Q.i += 1; Q.tries = 0; Q.given = []; Q.sel = null; Q.status = 'answering'; Q.fbKey = '';
-    $('#answer').value = '';
-    renderQuiz();
-    focusAnswer();
+  function submitCard(i) {
+    const Q = S.quiz, q = Q.questions[i], st = Q.st[i];
+    if (!Q || Q.exam || st.status === 'done') return;
+    if (q.type === 'mc') {   // one try for multiple choice
+      if (st.sel === null) { st.fbKey = 'quiz.pickFirst'; refreshCard(i); return; }
+      const ok = st.sel === q.correct;
+      Q.results[i] = { given: [st.sel], ok, tries: 1 };
+      st.status = 'done'; st.fbKey = ok ? 'quiz.correct' : 'quiz.wrong';
+    } else {
+      const input = st.draft;
+      const res = Checker.check(q, input);
+      if (res.reason === 'empty' || res.reason === 'unreadable') {
+        st.fbKey = res.reason === 'empty' ? 'quiz.empty' : 'quiz.unread';
+        refreshCard(i); focusCardInput(i); return;
+      }
+      st.tries += 1;
+      st.given = st.given.concat(input.trim());
+      if (res.ok || st.tries >= 2) {
+        Q.results[i] = { given: st.given, ok: res.ok, tries: st.tries };
+        st.status = 'done';
+        st.fbKey = res.ok ? (st.tries === 1 ? 'quiz.correct' : 'quiz.correct2') : 'quiz.wrong';
+      } else {
+        st.status = 'retry'; st.fbKey = 'quiz.retry';
+        refreshCard(i);
+        const inp = document.querySelector(`#qc${i} input.answer`); if (inp) { inp.focus(); inp.select(); }
+        return;
+      }
+    }
+    refreshCard(i);
+    if (view() === 'single') { const nx = document.querySelector(`#qc${i} .next`); if (nx) nx.focus(); }
   }
 
-  function insertKey(k) {
-    const a = $('#answer'); if (a.disabled) return;
+  /* single view: go to the next unanswered question, or finish */
+  function nextSingle() {
+    const Q = S.quiz, n = Q.questions.length;
+    for (let k = 1; k <= n; k++) {
+      const j = (Q.i + k) % n;
+      if (Q.st[j].status !== 'done') { Q.i = j; renderQuiz(); window.scrollTo(0, 0); focusCardInput(j); return; }
+    }
+    finishPractice();
+  }
+  function finishPractice() {
+    const Q = S.quiz;
+    if (!Q || Q.exam || Q.st.some(x => x.status !== 'done')) return;
+    saveSession(); go('results');
+  }
+
+  function setView(v) {
+    const Q = S.quiz, cur = view();
+    if (v === cur) return;
+    if (Q) { if (v === 'pages') Q.page = Math.floor(Q.i / PAGE); else Q.i = Q.page * PAGE; }
+    S.settings.view = v; saveSettings();
+    if (Q) { renderQuiz(); window.scrollTo(0, 0); }
+  }
+
+  function insertKey(a, k) {
+    if (!a || a.disabled) return;
     const s = a.selectionStart ?? a.value.length, e = a.selectionEnd ?? a.value.length;
     if (k === 'back') {
       const from = s === e ? Math.max(0, s - 1) : s;
@@ -255,12 +369,10 @@
     a.focus();
   }
 
-
   /* ---------- SELECTIVE TEST (timed exam: 35 questions / 40 min, or 18 / 20) ---------- */
   let timerId = null;
   function stopTimer() { if (timerId) { clearInterval(timerId); timerId = null; } }
   const mmss = ms => { const sec = Math.max(0, Math.round(ms / 1000)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
-  function scrollToQuestion() { const q = $('#qText'); if (q && q.scrollIntoView) q.scrollIntoView({ block: 'start' }); window.scrollTo(0, 0); }
 
   async function startTest(settings) {
     const len = settings.selLen === 'short' ? 'short' : 'full', spec = len === 'short' ? Selective.SHORT : Selective.FULL;
@@ -281,7 +393,7 @@
       out.push(...fromAi, ...local.filter(q => q.tier === tier).slice(0, mix[k] - fromAi.length));
     });
     S.quiz = {
-      exam: true, questions: out, i: 0, answers: Array(out.length).fill(null), results: [], finished: false,
+      exam: true, questions: out, i: 0, page: 0, answers: Array(out.length).fill(null), results: [], finished: false,
       startedAt: Date.now(), limitMs: spec.minutes * 60000,
       settings: Object.assign({}, settings, { subject: 'sel', topic: len === 'short' ? 'selshort' : 'selfull' })
     };
@@ -299,38 +411,6 @@
     if (left <= 0) finishTest(true);
   }
 
-  function renderExam() {
-    const Q = S.quiz, q = Q.questions[Q.i], n = Q.questions.length, answered = Q.answers.filter(a => a !== null).length;
-    $('#qProgress').textContent = t('quiz.progress', { i: Q.i + 1, n });
-    $('#qTopic').textContent = t('topic.' + q.topic);
-    $('#qBar').style.width = (100 * answered / n) + '%';
-    $('#qText').textContent = q.q[lang()] || q.q.en;
-    $('#qTip').hidden = true; $('#inputArea').hidden = true; $('#choiceArea').hidden = false;
-    $('#feedback').textContent = ''; $('#feedback').className = 'feedback';
-    $('#checkBtn').hidden = true; $('#nextBtn').hidden = true; $('#parentAnswer').hidden = true;
-    $('#examNav').hidden = false; $('#timer').hidden = false;
-    const box = $('#choices'); box.innerHTML = '';
-    q.choices.forEach((c, i) => {
-      const b = el('button', 'choice'); b.type = 'button';
-      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(Q.answers[Q.i] === i));
-      b.append(el('span', 'letter', 'ABCDE'[i]), el('span', '', c[lang()] || c.en));
-      b.addEventListener('click', () => { if (Q.finished) return; Q.answers[Q.i] = i; renderExam(); });
-      box.append(b);
-    });
-    $('#prevQ').disabled = Q.i === 0;
-    $('#nextQ').disabled = Q.i === n - 1;
-    $('#answeredCount').textContent = t('sel.answered', { a: answered, n });
-    const pal = $('#palette'); pal.innerHTML = '';
-    Q.questions.forEach((_, k) => {
-      const b = el('button', 'pal' + (Q.answers[k] !== null ? ' done' : '') + (k === Q.i ? ' current' : ''), String(k + 1));
-      b.type = 'button';
-      if (k === Q.i) b.setAttribute('aria-current', 'true');
-      b.addEventListener('click', () => { Q.i = k; renderExam(); scrollToQuestion(); });
-      pal.append(b);
-    });
-    tickTimer();
-  }
-
   function finishTest(timeUp) {
     const Q = S.quiz; if (!Q || !Q.exam || Q.finished) return;
     Q.finished = true; stopTimer();
@@ -339,6 +419,77 @@
     saveSession();
     go('results');
     if (timeUp) toast(t('sel.timeUp'), 6000);
+  }
+
+  /* ---------- PRINT (A4 worksheet, optional answer key on a separate page) ---------- */
+  function printMeta(settings, questions) {
+    const n = questions.length;
+    if (settings.subject === 'sel') {
+      const short = settings.selLen === 'short' || settings.topic === 'selshort', spec = short ? Selective.SHORT : Selective.FULL;
+      return { title: `${t('sel.heading')} – ${t(short ? 'topic.selshort' : 'topic.selfull')}`, info: t('print.infoSel', { n, m: spec.minutes }) };
+    }
+    const subject = settings.subject || 'maths';
+    return {
+      title: `${t('subject.' + subject)} – ${t('topic.' + (settings.topic || 'mixed'))}`,
+      info: t('print.infoPractice', { n, subject: t('subject.' + subject), y: settings.year, diff: t('diff.' + settings.diff) })
+    };
+  }
+
+  function openPrint(questions, settings) {
+    S.printJob = { questions, settings };
+    $('#printAnswers').checked = false;
+    window.I18N.applyStatic($('#printDlg'));
+    $('#printDlg').showModal();
+  }
+
+  function buildPrint(job, withAnswers, withWorking) {
+    const E = s => Fig.esc(s), lines = s => E(s).replace(/\n/g, '<br>');
+    const { questions, settings } = job, meta = printMeta(settings, questions), n = questions.length;
+    let h = `<header class="p-head"><div><p class="p-app">${E(t('app.title'))}</p><h1>${E(meta.title)}</h1></div>
+      <div class="p-fields"><span>${E(t('print.name'))}: <i></i></span><span>${E(t('print.date'))}: <i class="short"></i></span><span>${E(t('print.score'))}: <i class="short"></i> / ${n}</span></div></header>
+      <p class="p-info">${E(meta.info)}</p><ol class="p-qs">`;
+    questions.forEach(q => {
+      h += `<li class="p-q"><div class="p-text">${lines(qText(q))}</div>`;
+      if (q.fig) h += Fig.render(q.fig, lang());
+      if (q.type === 'mc') {
+        const longOpt = q.choices.some(c => (c[lang()] || c.en).length > 18);
+        h += `<ol class="p-opts${longOpt ? ' one-col' : ''}">${q.choices.map((c, k) => `<li><b>${'ABCDE'[k]}</b> ${E(c[lang()] || c.en)}</li>`).join('')}</ol>`;
+      } else {
+        h += `<p class="p-line">${E(t('print.answerLine'))}: <i></i></p>`;
+      }
+      h += '</li>';
+    });
+    h += '</ol>';
+    if (withAnswers) {
+      h += `<section class="p-key"><h2>${E(t('print.key'))} – ${E(meta.title)}</h2><p class="p-note">${E(t('print.forParents'))}</p>
+        <table><thead><tr><th>${E(t('print.keyQ'))}</th><th>${E(t('print.keyA'))}</th>${withWorking ? `<th>${E(t('print.keyW'))}</th>` : ''}</tr></thead><tbody>`;
+      questions.forEach((q, k) => {
+        const sol = q.sol ? (q.sol[lang()] || q.sol.en) : '';
+        h += `<tr><td>${k + 1}</td><td>${E(answerText(q))}</td>${withWorking ? `<td>${E(sol)}</td>` : ''}</tr>`;
+      });
+      h += '</tbody></table></section>';
+    }
+    $('#printArea').innerHTML = h;
+  }
+
+  async function doPrint(e) {
+    e.preventDefault();
+    const job = S.printJob; if (!job) return;
+    const withAnswers = $('#printAnswers').checked, withWorking = $('#printWorking').checked;
+    $('#printDlg').close();
+    if (withAnswers && !S.parent && !(await unlockParent())) return;   // answers stay hidden from students
+    buildPrint(job, withAnswers, withWorking);
+    setTimeout(() => window.print(), 150);
+  }
+
+  function printFromHome() {
+    const st = S.settings;
+    if (st.subject === 'sel') {
+      const len = st.selLen === 'short' ? 'short' : 'full';
+      openPrint(Selective.generateTest(len), Object.assign({}, st, { topic: len === 'short' ? 'selshort' : 'selfull' }));
+    } else {
+      openPrint(Gen.generateSet(st.subject, st.year, st.topic, st.diff, st.count), Object.assign({}, st));
+    }
   }
 
   function renderExamSummary(Q) {
@@ -590,25 +741,29 @@
     render();   // instant: re-renders text only, the typed answer and quiz state are untouched
   });
   $('#parentBtn').addEventListener('click', async () => {
-    if (S.screen === 'quiz') { if (await unlockParent()) renderQuiz(); return; }
+    if (S.screen === 'quiz') { await unlockParent(); return; }
     if (await unlockParent()) { draftProvider = null; delete $('#aiKey').dataset.touched; go('parent'); }
   });
   $('#startBtn').addEventListener('click', () => startQuiz(S.settings));
-  $('#answerForm').addEventListener('submit', e => { e.preventDefault(); submitAnswer(); });
-  $('#nextBtn').addEventListener('click', nextQuestion);
   $('#quitBtn').addEventListener('click', () => {
     if (confirm(t(S.quiz && S.quiz.exam ? 'sel.quitConfirm' : 'quiz.quitConfirm'))) { stopTimer(); S.quiz = null; go('home'); }
   });
-  $('#prevQ').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.exam && Q.i > 0) { Q.i -= 1; renderExam(); scrollToQuestion(); } });
-  $('#nextQ').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.exam && Q.i < Q.questions.length - 1) { Q.i += 1; renderExam(); scrollToQuestion(); } });
+  $('#prevQ').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.i > 0) goToQuestion(Q.i - 1); });
+  $('#nextQ').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.i < Q.questions.length - 1) goToQuestion(Q.i + 1); });
+  $('#prevPage').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.page > 0) { Q.page -= 1; renderQuiz(); window.scrollTo(0, 0); } });
+  $('#nextPage').addEventListener('click', () => { const Q = S.quiz; if (Q && (Q.page + 1) * PAGE < Q.questions.length) { Q.page += 1; renderQuiz(); window.scrollTo(0, 0); } });
+  $('#toResults').addEventListener('click', finishPractice);
+  $('#viewSingle').addEventListener('click', () => setView('single'));
+  $('#viewPages').addEventListener('click', () => setView('pages'));
+  $('#printQuiz').addEventListener('click', () => { const Q = S.quiz; if (Q) openPrint(Q.questions, Q.settings); });
+  $('#printHome').addEventListener('click', printFromHome);
+  $('#printResults').addEventListener('click', () => { const Q = S.quiz; if (Q) openPrint(Q.questions, Q.settings); });
+  $('#printForm').addEventListener('submit', doPrint);
+  $('#printCancel').addEventListener('click', () => $('#printDlg').close());
   $('#finishBtn').addEventListener('click', () => {
     const Q = S.quiz; if (!Q || !Q.exam) return;
     const left = Q.answers.filter(a => a === null).length;
     if (confirm(left ? t('sel.finishConfirm', { n: left }) : t('sel.finishConfirm0'))) finishTest(false);
-  });
-  document.querySelectorAll('.key').forEach(k => {
-    k.addEventListener('mousedown', e => e.preventDefault()); // keep the keyboard open / caret in place
-    k.addEventListener('click', () => insertKey(k.dataset.key));
   });
   $('#unlockBtn').addEventListener('click', unlockParent);
   $('#againBtn').addEventListener('click', () => startQuiz(S.lastQuizSettings || S.settings));
@@ -635,7 +790,7 @@
     } finally { btn.disabled = false; }
   });
   window.addEventListener('beforeunload', e => {
-    if (S.screen === 'quiz' && S.quiz && (S.quiz.i > 0 || (S.quiz.exam && !S.quiz.finished))) { e.preventDefault(); e.returnValue = ''; }
+    if (S.screen === 'quiz' && S.quiz && (S.quiz.exam ? !S.quiz.finished : S.quiz.st.some(x => x.status !== 'answering'))) { e.preventDefault(); e.returnValue = ''; }
   });
 
   registerSW();

@@ -70,12 +70,14 @@
       if (vals.every(v => Number.isFinite(v))) choices = choices.map((c, i) => [c, vals[i]]).sort((a, b) => a[1] - b[1]).map(x => x[0]);
       correct = choices.indexOf(right);
     }
-    return { subject: 'sel', type: 'mc', topic, tier, q: { en: o.en, zh: o.zh }, choices, correct,
+    const q = { subject: 'sel', type: 'mc', topic, tier, q: { en: o.en, zh: o.zh }, choices, correct,
       sol: { en: o.solEn || '', zh: o.solZh || o.solEn || '' }, source: 'local' };
+    if (o.fig) q.fig = o.fig;
+    return q;
   }
 
   /* "Which of these statements is/are correct?" — stmts: [{en, zh, ok}] numbered 1.. */
-  function statementsQ(tier, topic, introEn, introZh, stmts, solEn, solZh, askWrong) {
+  function statementsQ(tier, topic, introEn, introZh, stmts, solEn, solZh, askWrong, fig) {
     const n = stmts.length, truth = stmts.map(s => (askWrong ? !s.ok : s.ok));
     const subsets = [];
     for (let mask = 0; mask < 1 << n; mask++) subsets.push(mask);
@@ -92,7 +94,7 @@
     pool.sort((a, b) => bits(a).length - bits(b).length || a - b);
     const qEn = `${introEn}\n${stmts.map((s, i) => `${i + 1}. ${s.en}`).join('\n')}\n${askWrong ? 'Which of these statements cannot be correct?' : 'Which of these statements is/are correct?'}`;
     const qZh = `${introZh}\n${stmts.map((s, i) => `${i + 1}. ${s.zh}`).join('\n')}\n${askWrong ? '哪些说法不可能正确？' : '哪些说法是正确的？'}`;
-    return sel(tier, topic, { en: qEn, zh: qZh, fixed: pool.map(label), answerIndex: pool.indexOf(right), solEn, solZh });
+    return sel(tier, topic, { en: qEn, zh: qZh, fixed: pool.map(label), answerIndex: pool.indexOf(right), solEn, solZh, fig });
   }
 
   const T = { 1: [], 2: [], 3: [] };
@@ -443,8 +445,9 @@
     if (Math.random() < 0.5) sq = sq.map(r => [...r].reverse());
     if (Math.random() < 0.5) sq = [...sq].reverse();
     const S = sq[0].reduce((x, y) => x + y, 0), ans = sq[1][2];
-    const grid = sq.map((r, ri) => r.map((v, ci) => (ri === 0 || (ri === 1 && ci === 0) ? String(v).padStart(2, ' ') : ri === 1 && ci === 2 ? ' ♦' : '  ?')).join(' | ')).join('\n');
-    return sel(3, 'slogic', { en: `In a magic square, each row, each column and each diagonal add up to the same total.\nSome numbers are missing:\n${grid}\nWhat is the missing number at ♦?`, zh: `幻方中每行、每列、每条对角线上的数之和都相等。\n部分数字缺失：\n${grid}\n♦ 处的数是多少？`,
+    const cells = sq.map((r, ri) => r.map((v, ci) => (ri === 0 || (ri === 1 && ci === 0) ? String(v) : ri === 1 && ci === 2 ? '♦' : '')));
+    return sel(3, 'slogic', { fig: { type: 'table', grid: true, rows: cells },
+      en: `In a magic square, each row, each column and each diagonal add up to the same total.\nSome of the numbers in the magic square below are missing.\nWhat is the missing number at ♦?`, zh: `幻方中每行、每列、每条对角线上的数之和都相等。\n下面幻方中有些数缺失了。\n♦ 处的数是多少？`,
       correct: String(ans), wrong: [String(S - sq[1][0] - sq[0][1]), String(sq[1][1]), String(S / 3 + d), String(ans + d * 2), String(Math.abs(ans - d * 3))],
       solEn: `Total = ${S}. Column 1 gives the bottom-left ${sq[2][0]}; the diagonal gives the centre ${sq[1][1]}; ♦ = ${S} − ${sq[1][0]} − ${sq[1][1]} = ${ans}`, solZh: `每行和为 ${S}。由第一列得左下角 ${sq[2][0]}；由对角线得中心 ${sq[1][1]}；♦ = ${S} − ${sq[1][0]} − ${sq[1][1]} = ${ans}` });
   });
@@ -461,7 +464,8 @@
     claims.forEach((c, i) => { c.ok = c.en.endsWith(fr(truths[i]) + '.'); });
     return statementsQ(3, 'sstat', `A spinner has four equal sections numbered ${nums.join(', ')}. ${C[0]} spins it and gets ${chen}. Now ${E[0]} spins it once.`,
       `一个转盘平均分成四格，分别是 ${nums.join('、')}。${C[1]}转到了 ${chen}，现在${E[1]}转一次。`, claims,
-      `Even: ${fr(evenP)}; less than ${chen}: ${fr(lessP)}; sum > ${sumT}: ${fr(sumP)}`, `偶数：${fr(evenP)}；小于 ${chen}：${fr(lessP)}；和大于 ${sumT}：${fr(sumP)}`);
+      `Even: ${fr(evenP)}; less than ${chen}: ${fr(lessP)}; sum > ${sumT}: ${fr(sumP)}`, `偶数：${fr(evenP)}；小于 ${chen}：${fr(lessP)}；和大于 ${sumT}：${fr(sumP)}`, false,
+      { type: 'spinner', labels: nums });
   });
   add(3, 'smeas', () => {   // time zones + flights
     const [P] = people(1), dep = R(6, 20) * 60, day = R(0, 6), f1 = R(4, 8), stay = pick([12, 18, 24, 30]), f2 = R(10, 20), behind = pick([15, 16, 17, 18, 19]);
@@ -619,6 +623,139 @@
       zh: `一个钟在上午 ${f(drop)} 之前走时正常，那时摔了一下，之后一整天指针都以正常速度的两倍转动。\n当天下午 ${f(now)} 时，钟上显示几点？`,
       correct: f(shown), wrong: [f(now * 2), f(shown + 60), f(shown - 60), f(drop + (now - drop) / 2), f(shown + 30)],
       solEn: `${now - drop} minutes passed; the clock moved ${2 * (now - drop)} minutes from ${f(drop)} → ${f(shown)}`, solZh: `实际过了 ${now - drop} 分钟，钟走了 ${2 * (now - drop)} 分钟，从 ${f(drop)} 走到 ${f(shown)}` });
+  });
+
+
+  /* ======================= Questions with charts and diagrams ======================= */
+  const MONTHS = [['Jan', '1月'], ['Feb', '2月'], ['Mar', '3月'], ['Apr', '4月'], ['May', '5月'], ['Jun', '6月'], ['Jul', '7月'], ['Aug', '8月'], ['Sep', '9月'], ['Oct', '10月'], ['Nov', '11月'], ['Dec', '12月']].map(([en, zh]) => ({ en, zh }));
+  const WEEK = [['Mon', '周一'], ['Tue', '周二'], ['Wed', '周三'], ['Thu', '周四'], ['Fri', '周五']].map(([en, zh]) => ({ en, zh }));
+  const NOT_TO_SCALE = { en: '[diagram not to scale]', zh: '［图形不按比例］' };
+
+  add(1, 'smeas', () => {   // kitchen scale dial
+    const [P] = people(1), empty = R(15, 40) * 10, reading = R(Math.ceil((empty + 100) / 50), 18) * 50, sauce = reading - empty, need = sauce + R(2, 9) * 50 + pick([0, 20, 30]);
+    if (need > 990) return null;
+    const ans = need - sauce;
+    return sel(1, 'smeas', { fig: { type: 'dial', max: 1000, minor: 50, labelStep: 100, value: reading, unit: 'g' },
+      en: `${P[0]} needs ${need} grams of cooking sauce.\nA glass jar of cooking sauce is placed on a scale, as shown.\nThe glass jar weighs ${empty} g when empty.\nHow much more cooking sauce does ${P[0]} need?`,
+      zh: `${P[1]}需要 ${need} 克酱汁。\n把一罐酱汁放在秤上，如图所示。\n空玻璃罐重 ${empty} 克。\n${P[1]}还需要多少克酱汁？`,
+      correct: ans + ' g', wrong: [need - reading > 0 ? need - reading + ' g' : ans + 200 + ' g', sauce + ' g', ans + 100 + ' g', ans - 100 > 0 ? ans - 100 + ' g' : ans + 300 + ' g', need - empty + ' g'],
+      solEn: `The scale reads ${reading} g, so the sauce is ${reading} − ${empty} = ${sauce} g; ${need} − ${sauce} = ${ans} g`, solZh: `秤的读数是 ${reading} 克，酱汁重 ${reading} − ${empty} = ${sauce} 克；${need} − ${sauce} = ${ans} 克` });
+  });
+  add(1, 'smeas', () => {   // measuring jug
+    const [P] = people(1), v = R(1, 5) * 100, k = R(2, 5), ans = v * (k + 1);
+    return sel(1, 'smeas', { fig: { type: 'jug', max: 1200, minor: 100, labelStep: 200, value: v, unit: 'mL' },
+      en: `${P[0]} is making a fruit drink. ${P[0]} puts some orange juice into the jug, as shown.\nThen ${P[0]} adds ${k} times as much apple juice.\nHow many millilitres of fruit drink does ${P[0]} make?`,
+      zh: `${P[1]}在做果汁。先往量杯里倒了一些橙汁，如图所示。\n然后加入橙汁 ${k} 倍的苹果汁。\n一共做了多少毫升果汁？`,
+      correct: ans + ' mL', wrong: [v * k + ' mL', v + 100 * k + ' mL', (v + 100) * (k + 1) + ' mL', (v - 100 || 50) * (k + 1) + ' mL', v * (k + 2) + ' mL'],
+      solEn: `The jug shows ${v} mL. ${v} + ${k} × ${v} = ${ans} mL`, solZh: `量杯中有 ${v} 毫升。${v} + ${v} × ${k} = ${ans} 毫升` });
+  });
+  add(1, 'sstat', () => {   // column graph: missing column
+    const vals = Array.from({ length: 6 }, () => R(3, 7) * 5), tot = vals.reduce((a, b) => a + b, 0);
+    const cats = vals.map((_, i) => ({ en: `Class ${i + 1}`, zh: `${i + 1}班` }));
+    return sel(1, 'sstat', { fig: { type: 'bar', max: 40, step: 5, values: [...vals.slice(0, 5), null], cats: cats.map((c, i) => ({ en: String(i + 1), zh: String(i + 1) })), xLabel: { en: 'class', zh: '班级' }, yLabel: { en: 'number of children', zh: '人数' } },
+      en: `There are ${tot} children altogether in six classes.\nThe column graph shows the number of children in classes 1 to 5. The column for class 6 has not been drawn.\nHow many children are in class 6?`,
+      zh: `六个班一共有 ${tot} 名学生。\n条形统计图表示 1–5 班的人数，6 班的直条还没有画。\n6 班有多少人？`,
+      correct: String(vals[5]), wrong: [String(vals[5] + 5), String(vals[5] - 5), String(vals[5] + 10), String(Math.round(tot / 6)), String(vals[5] - 10)],
+      solEn: `Classes 1–5: ${vals.slice(0, 5).join(' + ')} = ${tot - vals[5]}; ${tot} − ${tot - vals[5]} = ${vals[5]}`, solZh: `1–5 班共 ${vals.slice(0, 5).join(' + ')} = ${tot - vals[5]} 人；${tot} − ${tot - vals[5]} = ${vals[5]}` });
+  });
+  add(1, 'smeas', () => {   // analogue clock
+    const [P] = people(1), h = R(1, 11), m = 5 * R(0, 11), pm = Math.random() < 0.5, plus = pick([25, 35, 40, 50, 55, 70, 85]);
+    const start = (h + (pm ? 12 : 0)) * 60 + m, end = start + plus;
+    return sel(1, 'smeas', { fig: { type: 'clock', h, m },
+      en: `${P[0]}'s clock shows the time in the ${pm ? 'afternoon' : 'morning'}.\nWhat time will it be ${plus} minutes later?`,
+      zh: `${P[1]}的钟显示的是${pm ? '下午' : '上午'}的时间。\n${plus} 分钟后是几点？`,
+      correct: ampm(end), wrong: [ampm(end + 60), ampm(end - 60), ampm(end + 720), ampm(start + plus - 10), ampm(end + 10)],
+      solEn: `The clock shows ${ampm(start).en}; ${plus} minutes later is ${ampm(end).en}`, solZh: `钟面显示${ampm(start).zh}，${plus} 分钟后是${ampm(end).zh}` });
+  });
+  add(2, 'sstat', () => {   // rainfall column graph statements
+    const st0 = R(0, 6), months = MONTHS.slice(st0, st0 + 6), vals = Array.from({ length: 6 }, () => R(1, 8) * 50);
+    const [a, b, c, d] = shuffle([0, 1, 2, 3, 4, 5]);
+    const diffCm = (vals[c] - vals[d]) / 10, claimCm = Math.abs(diffCm) + pick([0, 0, 5, -5].filter(x => Math.abs(diffCm) + x > 0));
+    const sum3 = vals[3] + vals[4] + vals[5];
+    const M = i => months[i];
+    const st = [
+      { en: `${M(a).en} had more than twice as much rainfall as ${M(b).en}.`, zh: `${M(a).zh}的降雨量是${M(b).zh}的两倍多。`, ok: vals[a] > 2 * vals[b] },
+      { en: `${M(diffCm >= 0 ? c : d).en} had ${claimCm} cm more rainfall than ${M(diffCm >= 0 ? d : c).en}.`, zh: `${M(diffCm >= 0 ? c : d).zh}比${M(diffCm >= 0 ? d : c).zh}多 ${claimCm} 厘米降雨。`, ok: claimCm === Math.abs(diffCm) },
+      { en: `The rainfall in ${M(3).en}, ${M(4).en} and ${M(5).en} combined was more than 1 metre.`, zh: `${M(3).zh}、${M(4).zh}、${M(5).zh}三个月的降雨量合计超过 1 米。`, ok: sum3 > 1000 }
+    ];
+    if (vals[a] === 2 * vals[b] || sum3 === 1000 || diffCm === 0) return null;
+    return statementsQ(2, 'sstat', 'The column graph shows the rainfall each month for six months.', '条形统计图表示六个月中每月的降雨量。', st,
+      `Read the columns: ${months.map((m, i) => `${m.en} ${vals[i]} mm`).join(', ')}. Remember 10 mm = 1 cm and 1000 mm = 1 m.`, `读图：${months.map((m, i) => `${m.zh} ${vals[i]} 毫米`).join('，')}。10 毫米 = 1 厘米，1000 毫米 = 1 米。`, false,
+      { type: 'bar', max: 400, step: 50, values: vals, cats: months, yLabel: { en: 'rainfall (mm)', zh: '降雨量（毫米）' }, xLabel: { en: 'month', zh: '月份' } });
+  });
+  add(2, 'sstat', () => {   // temperature line graph statements
+    const ys = [R(1, 3)]; for (let i = 1; i <= 8; i++) ys.push(Math.max(0, Math.min(5, ys[i - 1] + pick([-2, -1, 0, 1, 1, 2])))); const temps = ys.map(v => v * 5);
+    const hi = Math.max(...temps), lo = Math.min(...temps), hiAt = temps.indexOf(hi);
+    if (temps.filter(v => v === hi).length > 1 || hi === lo) return null;
+    const [a, b] = [R(0, 3), R(4, 7)], ch1 = Math.abs(temps[a + 1] - temps[a]), ch2 = Math.abs(temps[b + 1] - temps[b]);
+    if (ch1 === ch2) return null;
+    const claimLo = pick([lo, lo + 5]);
+    const st = [
+      { en: `The highest temperature was at ${hiAt} hours.`, zh: `最高气温出现在第 ${hiAt} 小时。`, ok: true },
+      { en: `The temperature change between ${a} and ${a + 1} hours was greater than the change between ${b} and ${b + 1} hours.`, zh: `第 ${a} 到 ${a + 1} 小时的气温变化比第 ${b} 到 ${b + 1} 小时的大。`, ok: ch1 > ch2 },
+      { en: `The lowest temperature was ${claimLo}°C.`, zh: `最低气温是 ${claimLo}°C。`, ok: claimLo === lo }
+    ];
+    if (Math.random() < 0.5) { const wrongAt = (hiAt + R(1, 7)) % 9; st[0] = { en: `The highest temperature was at ${wrongAt} hours.`, zh: `最高气温出现在第 ${wrongAt} 小时。`, ok: false }; }
+    return statementsQ(2, 'sstat', 'The graph shows the outdoor temperature during a period of 8 hours.', '折线统计图表示 8 小时内室外气温的变化。', st,
+      `Temperatures: ${temps.join(', ')} °C at 0–8 hours.`, `0–8 小时的气温：${temps.join('、')} °C。`, false,
+      { type: 'line', max: 25, step: 5, xs: [0, 1, 2, 3, 4, 5, 6, 7, 8], ys: temps, xLabel: { en: 'time (hours)', zh: '时间（小时）' }, yLabel: { en: 'temperature (°C)', zh: '气温（°C）' } });
+  });
+  add(2, 'sstat', () => {   // pictograph with half pictures
+    const k = pick([4, 6, 8, 10]), counts = WEEK.map(() => R(2, 12) / 2), i = R(0, 4); let j = R(0, 4);
+    if (i === j || counts[i] <= counts[j]) return null;
+    const ans = (counts[i] - counts[j]) * k;
+    return sel(2, 'sstat', { fig: { type: 'picto', icon: '🌸', rows: WEEK.map((d, x) => ({ label: d, count: counts[x] })), key: { en: `🌸 = ${k} bunches of flowers`, zh: `🌸 = ${k} 束花` } },
+      en: `The picture graph shows the bunches of flowers a shop sold each day.\nHow many more bunches were sold on ${WEEK[i].en} than on ${WEEK[j].en}?`,
+      zh: `象形统计图表示花店每天卖出的花束数量。\n${WEEK[i].zh}比${WEEK[j].zh}多卖出多少束？`,
+      correct: String(ans), wrong: [String(counts[i] - counts[j]), String(Math.round(counts[i] - counts[j]) * k + k), String(Math.floor(counts[i] - counts[j]) * k), String(counts[i] * k), String(ans + k / 2)],
+      solEn: `${WEEK[i].en}: ${counts[i]} × ${k} = ${counts[i] * k}; ${WEEK[j].en}: ${counts[j]} × ${k} = ${counts[j] * k}; difference ${ans}. (Half a flower = ${k / 2}.)`,
+      solZh: `${WEEK[i].zh}：${counts[i]} × ${k} = ${counts[i] * k}；${WEEK[j].zh}：${counts[j]} × ${k} = ${counts[j] * k}；相差 ${ans}。（半朵花代表 ${k / 2} 束）` });
+  });
+  add(2, 'sspace', () => {   // L-shape: perimeter or area from a labelled diagram
+    const W = R(8, 16), H = R(7, 14), a = R(3, W - 3), b = R(2, H - 3), askArea = Math.random() < 0.5;
+    const pts = [[0, 0], [W, 0], [W, H - b], [W - a, H - b], [W - a, H], [0, H]];
+    const labels = askArea ? [{ edge: 0, text: `${W} cm` }, { edge: 1, text: `${H - b} cm` }, { edge: 4, text: `${W - a} cm` }, { edge: 5, text: `${H} cm` }]
+      : [{ edge: 0, text: `${W} cm` }, { edge: 5, text: `${H} cm` }, { edge: 2, text: `${a} cm` }];
+    const ans = askArea ? W * H - a * b : 2 * (W + H);
+    return sel(2, 'sspace', { fig: { type: 'shape', pts, labels, shaded: true, note: NOT_TO_SCALE },
+      en: `What is the ${askArea ? 'area' : 'perimeter'} of the shaded shape?`, zh: `求阴影图形的${askArea ? '面积' : '周长'}。`,
+      correct: ans + (askArea ? ' cm²' : ' cm'),
+      wrong: askArea ? [W * H + ' cm²', W * H - a * (H - b) + ' cm²', (W - a) * H + ' cm²', ans + W + ' cm²', ans - b + ' cm²'] : [2 * (W + H) - 2 * a + ' cm', W + H + a + ' cm', 2 * (W + H) + 2 * a + ' cm', ans - b + ' cm', W + H + ' cm'],
+      solEn: askArea ? `Missing parts: ${W} − ${W - a} = ${a} cm and ${H} − ${H - b} = ${b} cm. Area = ${W} × ${H} − ${a} × ${b} = ${ans} cm²` : `The steps add up to the full width and height, so the perimeter is 2 × (${W} + ${H}) = ${ans} cm`,
+      solZh: askArea ? `缺掉的部分：${W} − ${W - a} = ${a} 厘米，${H} − ${H - b} = ${b} 厘米。面积 = ${W} × ${H} − ${a} × ${b} = ${ans} 平方厘米` : `把台阶的边平移，周长等于大长方形的周长：(${W} + ${H}) × 2 = ${ans} 厘米` });
+  });
+  /* random connected shape of n cells inside a w×h box */
+  function polyomino(n, w, h) {
+    const cells = [[R(0, w - 1), R(0, h - 1)]], key = c => c[0] + ',' + c[1], has = new Set(cells.map(key));
+    for (let tries = 0; cells.length < n && tries < 400; tries++) {
+      const [x, y] = pick(cells), [dx, dy] = pick([[1, 0], [-1, 0], [0, 1], [0, -1]]), c = [x + dx, y + dy];
+      if (c[0] < 0 || c[1] < 0 || c[0] >= w || c[1] >= h || has.has(key(c))) continue;
+      has.add(key(c)); cells.push(c);
+    }
+    let per = 0; cells.forEach(([x, y]) => [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => { if (!has.has(key([x + dx, y + dy]))) per++; }));
+    return { cells, per, area: cells.length };
+  }
+  add(3, 'sspace', () => {   // two shapes on a grid: compare perimeter and area
+    const X = polyomino(R(5, 9), 5, 5), Y = polyomino(R(5, 9), 5, 5);
+    const st = [
+      { en: 'Shape X has a larger perimeter than shape Y.', zh: '图形 X 的周长比图形 Y 大。', ok: X.per > Y.per },
+      { en: 'Shapes X and Y have the same perimeter.', zh: '图形 X 和 Y 的周长相等。', ok: X.per === Y.per },
+      { en: 'Shape X has a larger area than shape Y.', zh: '图形 X 的面积比图形 Y 大。', ok: X.area > Y.area }
+    ];
+    const shift = c => [c[0] + 7, c[1]];
+    return statementsQ(3, 'sspace', 'Shapes X and Y are drawn on a square grid.', '图形 X 和 Y 画在方格纸上。', st,
+      `X: perimeter ${X.per}, area ${X.area} squares. Y: perimeter ${Y.per}, area ${Y.area} squares.`, `X：周长 ${X.per}，面积 ${X.area} 格；Y：周长 ${Y.per}，面积 ${Y.area} 格。`, false,
+      { type: 'grid', w: 12, h: 5, shapes: [{ cells: X.cells, label: 'X' }, { cells: Y.cells.map(shift), label: 'Y' }] });
+  });
+  add(3, 'sstat', () => {   // pets column graph with two missing columns
+    const vals = [R(4, 10), R(5, 14), null, null, R(1, 5), R(0, 3)], three = R(2, 5), two = 2 * three, tot = vals.reduce((a, b) => a + (b || 0), 0) + two + three;
+    const ask3 = Math.random() < 0.5;
+    return sel(3, 'sstat', { fig: { type: 'bar', max: 15, step: 5, values: vals, cats: ['0', '1', '2', '3', '4', '5'], xLabel: { en: 'number of pets', zh: '宠物数量' }, yLabel: { en: 'number of children', zh: '人数' } },
+      en: `${tot} children were asked how many pets they have.\nMost of the results are shown in the column graph, but the columns for two and three pets are missing.\nThe number of children with two pets is twice the number with three pets.\nHow many children have ${ask3 ? 'three' : 'two'} pets?`,
+      zh: `调查了 ${tot} 名学生各养了几只宠物。\n大部分结果画在条形统计图中，但养 2 只和 3 只的直条缺失了。\n养 2 只宠物的人数是养 3 只的 2 倍。\n养 ${ask3 ? '3' : '2'} 只宠物的有多少人？`,
+      correct: String(ask3 ? three : two), wrong: [String(ask3 ? two : three), String(two + three), String(ask3 ? three + 1 : two + 2), String(ask3 ? three + 2 : two - 2), String(Math.round((two + three) / 2))],
+      solEn: `Shown columns total ${tot - two - three}, so 2 and 3 pets together = ${two + three} = 3 parts; 1 part = ${three}. Three pets: ${three}; two pets: ${two}`,
+      solZh: `图中已画出的共 ${tot - two - three} 人，养 2 只和 3 只的共 ${two + three} 人，即 3 份，每份 ${three} 人。养 3 只：${three} 人；养 2 只：${two} 人` });
   });
 
   /* ---------- building a test ---------- */
