@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Maths &amp; Reasoning</title>
   <meta name="description" content="Maths and reasoning practice for Years 4 to 10 in English and Simplified Chinese.">
-  <meta name="theme-color" content="#0b3d91">
+  <meta name="theme-color" content="#312e81">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -88,7 +88,8 @@
       </div>
 
       <p class="source" id="sourceLine"></p>
-      <button type="button" id="startBtn" class="btn primary" data-i18n="home.start">Start practice</button>
+      <button type="button" id="startBtn" class="btn primary big" data-i18n="home.start">Start practice</button>
+      <button type="button" id="printHome" class="btn secondary"><span aria-hidden="true">🖨️</span> <span data-i18n="print.home">Print a worksheet (A4)</span></button>
     </section>
 
     <!-- LOADING -->
@@ -99,51 +100,42 @@
       </div>
     </section>
 
-    <!-- QUIZ -->
-    <section id="screen-quiz" class="screen" hidden aria-labelledby="qText">
-      <div class="quiz-head">
-        <p id="qProgress" class="muted"></p>
-        <p id="timer" class="timer" role="timer" hidden></p>
-        <p id="qTopic" class="badge"></p>
-      </div>
-      <div class="bar" aria-hidden="true"><div id="qBar"></div></div>
-
-      <h2 id="qText" class="question" aria-live="polite"></h2>
-      <p id="qTip" class="tip small" data-i18n="quiz.wordTip" hidden></p>
-
-      <form id="answerForm" autocomplete="off" novalidate>
-        <div id="choiceArea" hidden>
-          <p class="label" id="chooseLabel" data-i18n="quiz.choose">Choose one answer</p>
-          <div id="choices" class="choices" role="radiogroup" aria-labelledby="chooseLabel"></div>
+    <!-- QUIZ: question cards; one at a time or in pages -->
+    <section id="screen-quiz" class="screen" hidden aria-label="Quiz">
+      <div class="quiz-top">
+        <div class="quiz-head">
+          <p id="qProgress" class="qprogress"></p>
+          <p id="timer" class="timer" role="timer" hidden></p>
         </div>
-        <div id="inputArea">
-        <label for="answer" class="label" data-i18n="quiz.label">Your answer</label>
-        <input id="answer" name="answer" type="text" inputmode="text" autocomplete="off" autocorrect="off"
-               autocapitalize="off" spellcheck="false" enterkeyhint="done" data-i18n-placeholder="quiz.placeholder">
-        <div class="keys" role="group" aria-label="Extra keys">
-          <button type="button" class="key" data-key="/">/</button>
-          <button type="button" class="key" data-key="-">−</button>
-          <button type="button" class="key" data-key=".">.</button>
-          <button type="button" class="key" data-key=" " data-i18n="key.space">space</button>
-          <button type="button" class="key" data-key="back" aria-label="Backspace">⌫</button>
-        </div>
-        <p class="muted small" data-i18n="quiz.hint">Fractions like 3/4 or 1 1/2. Units are optional.</p>
-        </div>
-        <p id="feedback" class="feedback" role="status" aria-live="assertive"></p>
-        <p id="parentAnswer" class="parent-box" hidden></p>
-        <button type="submit" id="checkBtn" class="btn primary" data-i18n="quiz.check">Check answer</button>
-        <button type="button" id="nextBtn" class="btn primary" hidden></button>
-        <div id="examNav" hidden>
-          <div class="row">
-            <button type="button" id="prevQ" class="btn secondary" data-i18n="sel.prev">Previous</button>
-            <button type="button" id="nextQ" class="btn primary" data-i18n="sel.next">Next</button>
+        <div class="bar" aria-hidden="true"><div id="qBar"></div></div>
+        <div class="toolbar">
+          <div class="seg" role="group" data-i18n-aria="view.label">
+            <button type="button" id="viewSingle" class="seg-btn" data-i18n="view.single">One at a time</button>
+            <button type="button" id="viewPages" class="seg-btn" data-i18n="view.pages">Pages</button>
           </div>
-          <p class="muted small answered" id="answeredCount"></p>
-          <p class="label" id="paletteLabel" data-i18n="sel.palette">Go to question</p>
-          <div id="palette" class="palette" role="group" aria-labelledby="paletteLabel"></div>
-          <button type="button" id="finishBtn" class="btn primary finish" data-i18n="sel.finish">Finish test</button>
+          <button type="button" id="printQuiz" class="tool-btn"><span aria-hidden="true">🖨️</span> <span data-i18n="print.btn">Print</span></button>
         </div>
-      </form>
+      </div>
+
+      <div id="qList" class="qlist"></div>
+
+      <div id="pageNav" class="row" hidden>
+        <button type="button" id="prevPage" class="btn secondary" data-i18n="view.prevPage">Previous page</button>
+        <button type="button" id="nextPage" class="btn primary" data-i18n="view.nextPage">Next page</button>
+      </div>
+      <p id="answerAll" class="muted small center" data-i18n="quiz.answerAll" hidden></p>
+      <button type="button" id="toResults" class="btn primary" data-i18n="quiz.finish" hidden>See results</button>
+
+      <div id="examNav" hidden>
+        <div class="row" id="examSingleNav">
+          <button type="button" id="prevQ" class="btn secondary" data-i18n="sel.prev">Previous</button>
+          <button type="button" id="nextQ" class="btn primary" data-i18n="sel.next">Next</button>
+        </div>
+        <p class="muted small answered" id="answeredCount"></p>
+        <p class="label" id="paletteLabel" data-i18n="sel.palette">Go to question</p>
+        <div id="palette" class="palette" role="group" aria-labelledby="paletteLabel"></div>
+        <button type="button" id="finishBtn" class="btn primary finish" data-i18n="sel.finish">Finish test</button>
+      </div>
       <button type="button" id="quitBtn" class="btn ghost" data-i18n="quiz.quit">Quit</button>
     </section>
 
@@ -159,6 +151,7 @@
       <p id="resLocked" class="muted" data-i18n="res.locked"></p>
       <button type="button" id="unlockBtn" class="btn secondary" data-i18n="res.unlock">Parent: show answers</button>
       <ol id="resList" class="review"></ol>
+      <button type="button" id="printResults" class="btn secondary"><span aria-hidden="true">🖨️</span> <span data-i18n="print.results">Print these questions</span></button>
       <button type="button" id="againBtn" class="btn primary" data-i18n="res.again">Practise again</button>
       <button type="button" id="homeBtn" class="btn ghost" data-i18n="res.home">Change settings</button>
     </section>
@@ -214,10 +207,26 @@
     </form>
   </dialog>
 
+  <dialog id="printDlg" aria-labelledby="printTitle">
+    <form method="dialog" id="printForm">
+      <h3 id="printTitle" data-i18n="print.title">Print on A4 paper</h3>
+      <label class="check"><input type="checkbox" id="printAnswers"> <span data-i18n="print.answers">Answer key on a separate page</span></label>
+      <label class="check"><input type="checkbox" id="printWorking" checked> <span data-i18n="print.working">Include worked solutions</span></label>
+      <p class="muted small" data-i18n="print.tip"></p>
+      <div class="row">
+        <button type="button" id="printCancel" class="btn ghost" data-i18n="pin.cancel">Cancel</button>
+        <button type="submit" id="printGo" class="btn primary" data-i18n="print.go">Print</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="printArea" class="print-area" aria-hidden="true"></div>
+
   <div id="toast" class="toast" role="status" hidden></div>
 
   <script src="./js/i18n.js"></script>
   <script src="./js/checker.js"></script>
+  <script src="./js/figures.js"></script>
   <script src="./js/gen-core.js"></script>
   <script src="./js/gen-maths.js"></script>
   <script src="./js/gen-word.js"></script>

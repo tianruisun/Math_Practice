@@ -81,6 +81,23 @@ for (let k = 0; k < 40; k++) {
     }
   }
 }
+
+/* Figures: every figure in generated selective questions renders in both languages */
+const FIG = require('../js/figures.js');
+{
+  let figs = 0;
+  for (let k = 0; k < 30; k++) for (const q of SEL.generateTest('full')) {
+    if (!q.fig) continue;
+    figs++;
+    for (const l of ['en', 'zh']) t(`figure ${q.fig.type} ${l}`, () => {
+      const h = FIG.render(q.fig, l);
+      assert.ok(h.startsWith('<figure'), 'no figure markup');
+      assert.ok(!/NaN|undefined|null|\[object/.test(h), h.slice(0, 120));
+    });
+  }
+  t('tests include charts/diagrams', () => assert.ok(figs > 30, 'only ' + figs));
+}
+t('figure escapes text', () => assert.ok(!FIG.render({ type: 'table', rows: [['<b>x</b>']] }, 'en').includes('<b>x')));
 t('selective timing', () => { assert.strictEqual(SEL.FULL.n, 35); assert.strictEqual(SEL.FULL.minutes, 40); assert.strictEqual(SEL.SHORT.n, 18); assert.strictEqual(SEL.SHORT.minutes, 20); });
 /* GA option count is normally 4 */
 t('ga mostly 4 options', () => {
