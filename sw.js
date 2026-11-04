@@ -1,5 +1,59 @@
-const V='maths-v2',F=['./','./index.html','./style.css','./i18n.js','./engine.js','./app.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png'];
-self.addEventListener('install',e=>e.waitUntil(caches.open(V).then(c=>c.addAll(F)).then(()=>self.skipWaiting())));
-self.addEventListener('activate',e=>e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(x=>x!==V).map(x=>caches.delete(x)))).then(()=>self.clients.claim())));
-self.addEventListener('fetch',e=>{if(e.request.method!=='GET'||new URL(e.request.url).origin!==location.origin)return;
- e.respondWith(fetch(e.request).then(r=>{const c=r.clone();caches.open(V).then(x=>x.put(e.request,c));return r;}).catch(()=>caches.match(e.request)));});
+/* Bump CACHE_VERSION on every release so phones pick up the new files. */
+const CACHE_VERSION = 'maths-v3';
+const ASSETS = [
+  './',
+  './index.html',
+  './css/style.css',
+  './js/i18n.js',
+  './js/checker.js',
+  './js/generator.js',
+  './js/ai.js',
+  './js/app.js',
+  './manifest.webmanifest',
+  './icons/icon.svg',
+  './icons/icon-192.png',
+  './icons/icon-512.png',
+  './icons/icon-maskable-512.png',
+  './icons/apple-touch-icon.png'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_VERSION)
+      .then(cache => cache.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' }))))
+      .then(() => self.skipWaiting())
+  );
+});
+
+self.addEventListener('activate', event => {
+  event.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k.startsWith('maths-') && k !== CACHE_VERSION).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
+  );
+});
+
+self.addEventListener('fetch', event => {
+  const req = event.request;
+  if (req.method !== 'GET') return;
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) return; // AI API calls go straight to the network
+
+  // Pages: network first (fresh when online), cached copy when offline.
+  if (req.mode === 'navigate') {
+    event.respondWith(
+      fetch(req)
+        .then(res => { const copy = res.clone(); caches.open(CACHE_VERSION).then(c => c.put('./index.html', copy)); return res; })
+        .catch(() => caches.match('./index.html', { ignoreSearch: true }))
+    );
+    return;
+  }
+
+  // Everything else: cache first, fall back to network (and cache it).
+  event.respondWith(
+    caches.match(req, { ignoreSearch: true }).then(hit => hit || fetch(req).then(res => {
+      if (res.ok && res.type === 'basic') { const copy = res.clone(); caches.open(CACHE_VERSION).then(c => c.put(req, copy)); }
+      return res;
+    }))
+  );
+});
