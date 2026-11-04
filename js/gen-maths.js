@@ -4,7 +4,8 @@
   'use strict';
   const G = root.Gen || require('./gen-core.js');
   const { R, pick, gcd, lcm, round, MINUS, num, paren, sg, coef, fracStr, mk } = G;
-  const reg = (topic, minYear, fn) => G.register('maths', topic, minYear, fn);
+  const MAXY = { quad: 12, index: 12 };
+  const reg = (topic, minYear, fn) => G.register('maths', topic, minYear, fn, { maxYear: MAXY[topic] || 10 });
   const yt = b => (b < 0 ? ` ${MINUS} ` : ' + ') + (Math.abs(b) === 1 ? '' : Math.abs(b)) + 'y';
   const zhNum = n => ({ 10: '十', 100: '百', 1000: '千', 10000: '万', 100000: '十万', 1000000: '百万', 10000000: '千万', 100000000: '亿' }[n]);
 

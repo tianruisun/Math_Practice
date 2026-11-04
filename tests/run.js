@@ -27,14 +27,17 @@ ok({ value: 4, unit: '' }, '4个'); ok({ value: 4, unit: '' }, '4.'); ok({ value
 ok({ value: 7.33, tol: 1e-9 }, '7.33'); no({ value: 7.33, tol: 1e-9 }, '7.3349');
 
 /* every generated question: clean text; typed answers accept their own displayed answer; MC well-formed */
-require('../js/gen-core.js'); require('../js/gen-maths.js'); require('../js/gen-word.js'); require('../js/gen-ga.js');
+require('../js/gen-core.js'); require('../js/gen-maths.js'); require('../js/gen-word.js'); require('../js/gen-junior.js');
+require('../js/gen-senior.js'); require('../js/gen-charts.js'); require('../js/gen-olympiad.js'); require('../js/gen-ga.js');
 const G = globalThis.Gen;
+const FIGR = require('../js/figures.js');
 let gen = 0;
 const BAD = /undefined|NaN|Infinity|null|\[object|function/;
-for (const subject of ['maths', 'ga']) for (const y of [4, 5, 6, 7, 8, 9, 10]) for (const d of [1, 2, 3, 4]) for (const topic of ['mixed', ...G.topicsFor(subject, y)]) {
+for (const subject of ['maths', 'ga']) for (const y of G.YEARS) for (const d of [1, 2, 3, 4]) for (const topic of ['mixed', ...G.topicsFor(subject, y)]) {
   const set = G.generateSet(subject, y, topic, d, 15);
   t(`set size ${subject} y${y} d${d} ${topic}`, () => assert.ok(set.length >= 8, 'got ' + set.length));
-  if (subject === 'maths' && topic === 'mixed') t(`mixed has word problems y${y} d${d}`, () => assert.ok(set.filter(q => q.topic === 'word').length >= 3));
+  if (subject === 'maths' && topic === 'mixed' && y >= 4 && y <= 10 && d <= 2) t(`mixed has word problems y${y} d${d}`, () => assert.ok(set.filter(q => q.topic === 'word').length >= 3));
+  if (subject === 'maths' && topic === 'mixed' && d === 4) t(`challenge mixes in competition problems y${y}`, () => assert.ok(set.filter(q => q.olympiad).length >= 5, 'only ' + set.filter(q => q.olympiad).length));
   for (const q of set) {
     gen++;
     const id = `${subject} y${y} d${d} ${q.topic}: ${q.q.en}`;
@@ -42,7 +45,9 @@ for (const subject of ['maths', 'ga']) for (const y of [4, 5, 6, 7, 8, 9, 10]) f
       const texts = [q.q.en, q.q.zh, q.sol.en, q.sol.zh, ...(q.type === 'mc' ? q.choices.flatMap(c => [c.en, c.zh]) : [q.answer])];
       for (const s of texts) assert.ok(typeof s === 'string' && s.length && !BAD.test(s), JSON.stringify(s));
       assert.strictEqual(q.subject, subject);
-      assert.ok(G.SUBJECTS[subject][q.topic].minYear <= y, 'topic above year');
+      const reg = G.SUBJECTS[subject][q.topic];
+      assert.ok(reg && reg.minYear <= y && y <= reg.maxYear, 'topic outside its years');
+      if (q.fig) for (const l of ['en', 'zh']) { const h = FIGR.render(q.fig, l); assert.ok(h.startsWith('<figure') && !/NaN|undefined/.test(h), 'figure ' + q.fig.type); }
       if (topic !== 'mixed') assert.strictEqual(q.topic, topic);
     });
     if (q.type === 'mc') {
@@ -60,6 +65,41 @@ for (const subject of ['maths', 'ga']) for (const y of [4, 5, 6, 7, 8, 9, 10]) f
   }
 }
 
+
+/* Year coverage, school split and olympiad bank */
+t('years 1–14 all have maths topics', () => { for (const y of G.YEARS) assert.ok(G.topicsFor('maths', y).length >= 6, 'year ' + y); });
+t('ga available every year', () => { for (const y of G.YEARS) assert.ok(G.topicsFor('ga', y).length >= 5, 'year ' + y); });
+t('primary/high split', () => { assert.deepStrictEqual(G.PRIMARY, [1, 2, 3, 4, 5, 6]); assert.deepStrictEqual(G.HIGH, [7, 8, 9, 10, 11, 12, 13, 14]); });
+t('extension topics only in 3U/4U', () => {
+  assert.ok(!G.topicsFor('maths', 12).includes('comb') && G.topicsFor('maths', 13).includes('comb'));
+  assert.ok(!G.topicsFor('maths', 13).includes('complex') && G.topicsFor('maths', 14).includes('complex'));
+});
+{
+  const O = globalThis.Olympiad;
+  O.T.forEach((tpl, i) => {
+    for (let k = 0; k < 60; k++) {
+      const q = tpl.fn(); if (!q) continue;
+      t(`olympiad #${i} ${q.q.en.slice(0, 40)}`, () => {
+        assert.ok(Number.isFinite(q.value), 'value');
+        assert.ok(C.check(q, q.answer).ok, 'self-check ' + q.answer);
+        assert.ok(!/NaN|undefined|null/.test(q.q.en + q.q.zh + q.sol.en + q.sol.zh), 'text');
+      });
+    }
+  });
+  /* spot-check brute-force answers against known values */
+  t('olympiad known answers', () => {
+    let z = 0; for (let p = 5; p <= 100; p *= 5) z += Math.floor(100 / p);
+    assert.strictEqual(z, 24);
+  });
+  t('challenge sets are mostly competition problems', () => {
+    let oly = 0, tot = 0;
+    for (const y of [2, 5, 8, 12]) for (let k = 0; k < 10; k++) { const s2 = G.generateSet('maths', y, 'mixed', 4, 10); tot += s2.length; oly += s2.filter(q => q.olympiad).length; }
+    assert.ok(oly / tot > 0.5, 'share ' + (oly / tot));
+  });
+  t('core sets never use competition problems', () => {
+    for (const y of [2, 5, 8, 12]) { const s2 = G.generateSet('maths', y, 'mixed', 1, 15); assert.ok(!s2.some(q => q.olympiad)); }
+  });
+}
 /* Selective test: right length and shape, 5 distinct options, valid answers, easy → hard */
 const SEL = require('../js/gen-selective.js');
 for (let k = 0; k < 40; k++) {

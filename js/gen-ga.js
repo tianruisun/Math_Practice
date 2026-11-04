@@ -5,7 +5,7 @@
   'use strict';
   const G = root.Gen || require('./gen-core.js');
   const { R, pick, shuffle, MINUS, num, both, mc, nearNums } = G;
-  const reg = (topic, minYear, fn) => G.register('ga', topic, minYear, fn);
+  const reg = (topic, minYear, fn) => G.register('ga', topic, 1, (y, d) => fn(Math.max(4, Math.min(10, y)), y < 4 ? Math.max(1, d - 1) : y > 10 ? Math.min(4, d + 1) : d));
   const L = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const letter = i => L[((i % 26) + 26) % 26];
 

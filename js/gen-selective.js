@@ -758,6 +758,45 @@
       solZh: `图中已画出的共 ${tot - two - three} 人，养 2 只和 3 只的共 ${two + three} 人，即 3 份，每份 ${three} 人。养 3 只：${three} 人；养 2 只：${two} 人` });
   });
 
+
+  add(2, 'sstat', () => {   // pie chart: how students travel to school
+    const modes = [['walk', '步行'], ['bus', '公交车'], ['car', '汽车'], ['bike', '自行车'], ['train', '火车']].map(([en, zh]) => ({ en, zh }));
+    const parts = pick([[40, 25, 20, 15], [35, 30, 25, 10], [45, 20, 20, 15], [30, 30, 25, 15], [50, 25, 15, 10]]), sel4 = shuffle(modes).slice(0, 4);
+    const N = pick([120, 160, 200, 240, 300, 360, 400, 600]), i = R(0, 3); let j = R(0, 3); if (i === j) j = (i + 1) % 4;
+    const hi = parts[i] >= parts[j] ? i : j, lo = hi === i ? j : i, v = N * (parts[hi] - parts[lo]) / 100;
+    if (!Number.isInteger(v) || v === 0) return null;
+    return sel(2, 'sstat', { fig: { type: 'pie', values: parts, labels: sel4, showValues: parts.map(p => p + '%') },
+      en: `The pie chart shows how the ${N} students at a school travel to school.\nHow many more students ${sel4[hi].en === 'walk' ? 'walk' : 'travel by ' + sel4[hi].en} than ${sel4[lo].en === 'walk' ? 'walk' : 'travel by ' + sel4[lo].en}?`,
+      zh: `扇形统计图表示某校 ${N} 名学生上学的方式。\n${sel4[hi].zh}上学的比${sel4[lo].zh}上学的多多少人？`,
+      correct: String(v), wrong: [String(parts[hi] - parts[lo]), String(N * parts[hi] / 100), String(v + N / 20), String(Math.max(1, v - N / 20)), String(v * 2)],
+      solEn: `${parts[hi]}% − ${parts[lo]}% = ${parts[hi] - parts[lo]}% of ${N} = ${v}`, solZh: `${parts[hi]}% − ${parts[lo]}% = ${parts[hi] - parts[lo]}%，${N} × ${parts[hi] - parts[lo]}% = ${v}` });
+  });
+  add(2, 'sspace', () => {   // reflect and translate a point on a grid
+    const x = R(1, 4) * (Math.random() < 0.5 ? -1 : 1), y = R(1, 4) * (Math.random() < 0.5 ? -1 : 1), axis = pick(['x', 'y']), down = R(1, 3), right = R(0, 2);
+    const rx = axis === 'y' ? -x : x, ry = axis === 'x' ? -y : y, fx = rx + right, fy = ry - down;
+    const P = (a, b) => `(${a}, ${b})`.replace(/-/g, MINUS);
+    const cands = [P(fx, fy), P(-fx, fy), P(fx, -fy), P(axis === 'y' ? x + right : -x + right, fy), P(rx + right, ry + down), P(fx + 1, fy), P(fx, fy + 1), P(fx - 1, fy)];
+    const opts = shuffle(cands.filter((v, k) => cands.indexOf(v) === k).slice(0, 5));
+    if (opts.length < 5) return null;
+    return sel(2, 'sspace', { fig: { type: 'coord', xmin: -5, xmax: 5, ymin: -5, ymax: 5, points: [[x, y, 'P']] },
+      en: `Point P is reflected in the ${axis}-axis. The image is then moved ${down} unit${down > 1 ? 's' : ''} down${right ? ` and ${right} unit${right > 1 ? 's' : ''} right` : ''}.\nWhat are the coordinates of the final point?`,
+      zh: `点 P 先关于 ${axis} 轴作轴对称，再向下平移 ${down} 个单位${right ? `，向右平移 ${right} 个单位` : ''}。\n最后得到的点的坐标是多少？`,
+      fixed: opts.map(both), answerIndex: opts.indexOf(P(fx, fy)), solEn: `Reflect: ${P(rx, ry)}; move: ${P(fx, fy)}`, solZh: `对称后 ${P(rx, ry)}；平移后 ${P(fx, fy)}` });
+  });
+  add(3, 'smeas', () => {   // travel graph
+    const legs = [], xs = [0], ys = [0]; let t = 0, dist = 0;
+    for (let k = 0; k < 4; k++) { const dt = 1, dd = k === 1 ? 0 : pick([20, 40, 60, 80]); t += dt; dist += dd; xs.push(t); ys.push(dist); legs.push(dd); }
+    const fastest = Math.max(...legs), stopAt = legs.indexOf(0), ask = pick(['fast', 'avg']);
+    const v = ask === 'fast' ? fastest : dist / 4;
+    if (dist > 200) return null;
+    return sel(3, 'smeas', { fig: { type: 'line', max: 200, step: 40, xs, ys, xLabel: { en: 'time (hours)', zh: '时间（小时）' }, yLabel: { en: 'distance (km)', zh: '路程（千米）' } },
+      en: `The travel graph shows a car journey.\n${ask === 'fast' ? 'What was the greatest speed during the journey, in km/h?' : 'What was the average speed for the whole journey (including the stop), in km/h?'}`,
+      zh: `行程图表示一次汽车旅行。\n${ask === 'fast' ? '旅途中最快的速度是每小时多少千米？' : '整个旅程（包括停留）的平均速度是每小时多少千米？'}`,
+      correct: v + ' km/h', wrong: [dist + ' km/h', (ask === 'fast' ? dist / 4 : fastest) + ' km/h', v + 10 + ' km/h', Math.max(5, v - 10) + ' km/h', Math.round(dist / 3) + ' km/h'],
+      solEn: ask === 'fast' ? `Steepest section: ${fastest} km in 1 hour = ${fastest} km/h (the flat section from ${stopAt + 1} to ${stopAt + 2} h is a stop)` : `Total ${dist} km in 4 hours = ${dist / 4} km/h`,
+      solZh: ask === 'fast' ? `最陡的一段 1 小时行 ${fastest} 千米，速度 ${fastest} 千米/时（水平段为停留）` : `总路程 ${dist} 千米，用时 4 小时，平均 ${dist / 4} 千米/时` });
+  });
+
   /* ---------- building a test ---------- */
   function pickFrom(tier, count) {
     const out = [], used = new Set(), pool = shuffle(T[tier]);

@@ -42,42 +42,52 @@
   };
 
   const DIFF_WORDS = {
-    1: 'Core – the standard textbook level for this grade in China / Singapore (not easy by Western standards)',
-    2: 'Standard – typical exam questions for this grade in China / Singapore, usually 2 steps',
-    3: 'Advanced – harder exam questions (拓展/拔高), multi-step, combining ideas',
-    4: 'Challenge – competition style (奥数 / Singapore Math Olympiad level for this age): non-routine, needs insight'
+    1: 'Core – the standard textbook level for this year (China 人教版 / Singapore MOE), one or two steps',
+    2: 'Standard – typical school exam questions for this year in China / Singapore, usually two or three steps',
+    3: 'Advanced – TUTORING-CENTRE EXTENSION level (培优班 / selective & scholarship coaching): clearly harder than any school exam, multi-step and non-routine, combining ideas; do NOT keep to the school syllabus difficulty',
+    4: 'Challenge – OLYMPIAD level (top questions of the Australian Mathematics Competition, AMC 10/12, AIME-style, 奥数/数学竞赛): well beyond school standards, needs a clever idea (counting, number theory, invariants, symmetry, clever algebra, geometry insight); still with ONE exact numeric answer'
   };
+
+  /* Years 1–12; 13 = Year 12 Extension 1 (3U); 14 = Year 12 Extension 2 (4U) */
+  function yearText(year) {
+    if (year <= 10) return `a Year ${year} student (age about ${year + 5})`;
+    if (year <= 12) return `a Year ${year} student studying NSW HSC Mathematics Advanced`;
+    if (year === 13) return 'a Year 12 student studying NSW HSC Mathematics Extension 1 (3 Unit)';
+    return 'a Year 12 student studying NSW HSC Mathematics Extension 2 (4 Unit)';
+  }
 
   function buildPrompt(subject, year, topic, diff, n, topicNames) {
     const topicLine = topic === 'mixed'
-      ? `Mix these topics: ${topicNames.map(([k, name]) => `${k} (${name})`).join(', ')}.`
+      ? `Mix these topics: ${topicNames.filter(([k]) => k !== 'olymp').map(([k, name]) => `${k} (${name})`).join(', ')}.`
       : `Topic: ${topic} (${(topicNames.find(([k]) => k === topic) || [])[1] || topic}).`;
     const common = [
       `- question_en in clear English; question_zh is the SAME question in natural Simplified Chinese.`,
       `- solution_en / solution_zh: a short worked solution in each language.`,
       `- "topic" must be one of the topic keys given above.`,
-      `- Plain text only: × ÷ − ² ³ √ π, fractions as a/b, powers as x^2. No LaTeX, no markdown.`,
-      `- Never reveal the answer in the question. Make questions varied. Check every answer carefully.`
+      `- Plain text only: × ÷ − ² ³ √ π ∫ Σ, fractions as a/b, powers as x^2. No LaTeX, no markdown.`,
+      `- Never reveal the answer in the question. Make questions varied. Check every answer carefully${diff >= 3 ? ' – solve each problem fully yourself before writing it, because these are hard' : ''}.`
     ];
+    const level = diff >= 3
+      ? `Difficulty: ${DIFF_WORDS[diff]}. The difficulty must be obviously higher than ordinary school work for ${yearText(year)}${diff === 4 ? ' – think competition finalists' : ''}.`
+      : `Difficulty: ${DIFF_WORDS[diff]}.`;
     if (subject === 'ga') {
       return [
-        `Write ${n} General Ability (reasoning) multiple-choice questions for a Year ${year} student (age about ${year + 5}), at the level of selective-school / gifted entrance tests (e.g. Singapore GEP, Australian OC/selective, Chinese 思维训练).`,
-        topicLine, `Difficulty: ${DIFF_WORDS[diff]}.`, '', 'Rules:',
+        `Write ${n} General Ability (reasoning) multiple-choice questions for ${yearText(year)}, at the level of selective-school / gifted entrance tests (e.g. Singapore GEP, Australian OC/selective, Chinese 思维训练).`,
+        topicLine, level, '', 'Rules:',
         '- Exactly 4 options in choices_en and the same 4 options, in the same order, in choices_zh. correct_index is 0–3. Exactly one option is correct; the others are plausible.',
         '- Use reasoning that survives translation: number and letter series, codes, logical deduction, ordering, truth-tellers, symbol equations, patterns (emoji shapes allowed), directions, calendar, counting and spatial reasoning. Do NOT use synonyms, rhymes, spelling or other language-specific wordplay. Letters A–Z may be used in both languages.',
         ...common
       ].join('\n');
     }
     return [
-      `Write ${n} maths practice questions for a Year ${year} student (age about ${year + 5}). Use the level of Grade ${year} in mainland China (人教版) and Singapore (MOE) — this is noticeably harder than Australian/UK expectations.`,
-      topicLine, `Difficulty: ${DIFF_WORDS[diff]}.`,
+      `Write ${n} maths questions for ${yearText(year)}.` + (diff <= 2 ? ' Use the level of the same grade in mainland China (人教版) and Singapore (MOE), which is harder than Australian/UK expectations.' : ''),
+      topicLine, level,
       topic === 'mixed' || topic === 'word'
-        ? `At least ${topic === 'word' ? 'all' : 'half'} of the questions must be word problems (应用题): a short real-life situation the student must read, turn into a calculation or an equation (方程), and solve — e.g. 和差/和倍, 鸡兔同笼, 植树, 年龄, 行程(相遇/追及), 工程, 盈亏, 浓度, 利润折扣, Singapore before–after and ratio-change model problems, and equation/simultaneous-equation problems.`
-        : 'Include some short word problems where they fit the topic.',
+        ? (year >= 11 ? 'Include some applied (word) problems that need a model or equation.' : `At least ${topic === 'word' ? 'all' : 'a third'} of the questions must be word problems (应用题): a short situation the student must turn into a calculation or an equation (方程) and solve.`)
+        : 'Include some word problems where they fit the topic.',
       '', 'Rules:',
-      '- Every answer must be a single number: integer, decimal, or fraction like 3/4 (negative allowed). No words, lists, coordinates or expressions. If a problem has several unknowns, ask for just one of them.',
+      '- Every answer must be a single number: integer, decimal, or fraction like 3/4 (negative allowed). No words, lists, coordinates, surds or expressions. If a problem has several unknowns, ask for just one. If the exact answer is irrational, ask for it to 2 decimal places.',
       '- Put the number ONLY in "answer" and the unit ONLY in "unit" (from the allowed list, "" if none). "$" for money (元 in Chinese), "%" for percentages, "°" for angles.',
-      '- If the answer is not exact, say how to round it (e.g. "to 2 decimal places") or say "use π = 3.14", and give that exact answer.',
       '- For equation problems, show the equation in the solution (e.g. "Let x = …; 3x + 5 = 2x + 12; x = 7").',
       ...common
     ].join('\n');
@@ -110,7 +120,7 @@
       model,
       max_tokens: 16000,
       // harder sets get more thinking so the answers are checked properly
-      output_config: { effort: diff >= 3 ? 'medium' : 'low', format: { type: 'json_schema', schema } },
+      output_config: { effort: diff >= 4 ? 'high' : diff >= 3 ? 'medium' : 'low', format: { type: 'json_schema', schema } },
       system: SYSTEM,
       messages: [{ role: 'user', content: prompt }]
     };

@@ -18,7 +18,9 @@
   const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai' };
 
   /* ---------- state ---------- */
-  const YEARS = [4, 5, 6, 7, 8, 9, 10];
+  const YEARS = Gen.YEARS;   // 1–12, 13 = Year 12 Extension 1 (3U), 14 = Year 12 Extension 2 (4U)
+  const yearLabel = y => (y >= 11 ? t('year.' + y) : t('home.yearN', { n: y }));
+  const schoolOf = y => (y <= 6 ? 'primary' : 'high');
   const COUNTS = [5, 10, 15, 20];
   const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10, selLen: 'full', view: 'single' };
   const SUBJECTS = ['maths', 'ga', 'sel'];
@@ -66,6 +68,20 @@
     });
   }
 
+  /* fill a <select> (combo box) and keep the current value */
+  function combo(sel, options, value, onChange) {
+    sel.innerHTML = '';
+    options.forEach(([v, label]) => { const o = el('option', '', label); o.value = String(v); sel.append(o); });
+    sel.value = String(value);
+    if (sel.value !== String(value) && options.length) sel.value = String(options[0][0]);
+    sel.onchange = () => onChange(sel.value);
+  }
+
+  function appendFig(parent, q) {
+    if (!q.fig || !window.Fig) return;
+    const f = el('div', 'figwrap small-fig'); f.innerHTML = Fig.render(q.fig, lang()); parent.append(f);
+  }
+
   function topicOptions(subject, year) {
     return [['mixed', t('topic.mixed')], ...Gen.topicsFor(subject, year).map(k => [k, t('topic.' + k)])];
   }
@@ -87,6 +103,7 @@
     const st = S.settings;
     if (!SUBJECTS.includes(st.subject)) st.subject = 'maths';
     if (![1, 2, 3, 4].includes(st.diff)) st.diff = 2;
+    if (!YEARS.includes(st.year)) st.year = 6;
     if (st.topic !== 'mixed' && !Gen.topicsFor(st.subject, st.year).includes(st.topic)) st.topic = 'mixed';
     chips($('#subjectChips'), 'subject', SUBJECTS.map(s => [s, t('subject.' + s)]), st.subject, v => { st.subject = v; st.topic = 'mixed'; saveSettings(); renderHome(); });
     $('#subjectNote').textContent = t(st.subject === 'ga' ? 'home.gaNote' : st.subject === 'sel' ? 'home.selNote' : 'home.levelNote');
@@ -94,13 +111,17 @@
     $('#practiceOptions').hidden = isSel;
     $('#selOptions').hidden = !isSel;
     if (!['full', 'short'].includes(st.selLen)) st.selLen = 'full';
-    chips($('#selLenChips'), 'selLen', ['full', 'short'].map(k => [k, t('sel.len.' + k)]), st.selLen, v => { st.selLen = v; saveSettings(); });
+    combo($('#selLenSel'), ['full', 'short'].map(k => [k, t('sel.len.' + k)]), st.selLen, v => { st.selLen = v; saveSettings(); });
     $('#startBtn').textContent = t(isSel ? 'sel.start' : 'home.start');
-    chips($('#yearChips'), 'year', YEARS.map(y => [y, String(y)]), st.year, v => { st.year = v; saveSettings(); renderHome(); });
-    $('#yearChips').setAttribute('aria-label', t('home.year'));
-    chips($('#topicChips'), 'topic', topicOptions(st.subject, st.year), st.topic, v => { st.topic = v; saveSettings(); });
-    chips($('#diffChips'), 'diff', [1, 2, 3, 4].map(d => [d, t('diff.' + d)]), st.diff, v => { st.diff = v; saveSettings(); });
-    chips($('#countChips'), 'count', COUNTS.map(n => [n, String(n)]), st.count, v => { st.count = v; saveSettings(); });
+    if (!YEARS.includes(st.year)) st.year = 6;
+    const school = schoolOf(st.year);
+    combo($('#schoolSel'), ['primary', 'high'].map(k => [k, t('school.' + k)]), school, v => {
+      st.year = v === 'primary' ? Math.min(st.year, 6) : Math.max(st.year, 7); saveSettings(); renderHome();
+    });
+    combo($('#yearSel'), (school === 'primary' ? Gen.PRIMARY : Gen.HIGH).map(y => [y, yearLabel(y)]), st.year, v => { st.year = +v; saveSettings(); renderHome(); });
+    combo($('#topicSel'), topicOptions(st.subject, st.year), st.topic, v => { st.topic = v; saveSettings(); });
+    combo($('#diffSel'), [1, 2, 3, 4].map(d => [d, t('diff.' + d)]), st.diff, v => { st.diff = +v; saveSettings(); });
+    combo($('#countSel'), COUNTS.map(n => [n, String(n)]), st.count, v => { st.count = +v; saveSettings(); });
     const ai = aiConfig();
     $('#sourceLine').textContent = ai ? t('home.source.ai', { name: AI.PROVIDERS[ai.provider].name }) : t('home.source.local');
   }
@@ -431,7 +452,7 @@
     const subject = settings.subject || 'maths';
     return {
       title: `${t('subject.' + subject)} – ${t('topic.' + (settings.topic || 'mixed'))}`,
-      info: t('print.infoPractice', { n, subject: t('subject.' + subject), y: settings.year, diff: t('diff.' + settings.diff) })
+      info: t('print.infoPractice', { n, subject: t('subject.' + subject), y: yearLabel(settings.year), diff: t('diff.' + settings.diff) })
     };
   }
 
@@ -519,7 +540,7 @@
       b[1] += 1; if (Q.results[i] && Q.results[i].ok) b[0] += 1;
     });
     const wrong = Q.questions.map((q, i) => (Q.results[i] && Q.results[i].ok ? null : {
-      topic: q.topic, type: q.type, q: q.q, answer: q.answer, choices: q.choices, correct: q.correct, sol: q.sol, given: (Q.results[i] && Q.results[i].given) || []
+      topic: q.topic, type: q.type, q: q.q, fig: q.fig, answer: q.answer, choices: q.choices, correct: q.correct, sol: q.sol, given: (Q.results[i] && Q.results[i].given) || []
     })).filter(Boolean);
     const h = store.get(K.history, []);
     h.push({
@@ -545,6 +566,7 @@
       const head = el('p', 'q');
       head.append(el('span', 'mark ' + (r.ok ? 'ok' : 'bad'), r.ok ? '✓ ' : '✗ '), document.createTextNode((i + 1) + '. ' + (q.q[lang()] || q.q.en)));
       li.append(head);
+      appendFig(li, q);
       li.append(el('p', 'muted', t('res.yours', { a: givenText(q, r.given) }) + (r.ok && r.tries === 2 ? ' ' + t('res.second') : '')));
       if (S.parent) {
         const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: answerText(q) }))); li.append(p);
@@ -582,7 +604,7 @@
     const ul = el('ul', 'plain');
     const fmtDate = d => new Date(d).toLocaleDateString(lang() === 'zh' ? 'zh-CN' : 'en-AU', { day: 'numeric', month: 'short' });
     h.slice(-8).reverse().forEach(x => ul.append(el('li', '', t('prog.row', {
-      date: fmtDate(x.date), year: x.subject === 'sel' ? '⏱ ' + mmss(x.time || 0) : t('home.yearN', { n: x.year }), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
+      date: fmtDate(x.date), year: x.subject === 'sel' ? '⏱ ' + mmss(x.time || 0) : yearLabel(x.year), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
     }))));
     box.append(ul);
 
@@ -594,6 +616,7 @@
       wrong.forEach(w => {
         const li = el('li', 'bad');
         li.append(el('p', 'q', w.q[lang()] || w.q.en));
+        appendFig(li, w);
         li.append(el('p', 'muted', t('res.yours', { a: givenText(w, w.given) })));
         if (S.parent) {
           const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: answerText(w) }))); li.append(p);
@@ -605,13 +628,21 @@
       box.append(ol);
     }
 
-    if (S.parent) {
-      const reset = el('button', 'btn ghost', t('prog.reset')); reset.type = 'button';
-      reset.addEventListener('click', () => { if (confirm(t('prog.resetConfirm'))) { store.del(K.history); renderProgress(); } });
-      box.append(reset);
-    } else {
-      box.append(el('p', 'muted small', t('prog.parentOnly')));
-    }
+    if (!S.parent) box.append(el('p', 'muted small', t('prog.parentOnly')));
+    appendClearButton(box);
+  }
+
+  /* Clear progress: always visible, protected by the parent PIN */
+  function appendClearButton(box) {
+    const wrap = el('div', 'clear-row');
+    const btn = el('button', 'btn secondary danger', '🗑 ' + t('prog.clear')); btn.type = 'button'; btn.id = 'clearProgress';
+    btn.addEventListener('click', async () => {
+      if (!S.parent && !(await unlockParent())) return;
+      if (confirm(t('prog.resetConfirm'))) { store.del(K.history); toast(t('prog.clear') + ' ✓'); renderProgress(); }
+    });
+    wrap.append(btn);
+    if (!S.parent) wrap.append(el('p', 'muted small center', t('prog.clearNote')));
+    box.append(wrap);
   }
 
   /* ---------- PARENT: PIN ---------- */

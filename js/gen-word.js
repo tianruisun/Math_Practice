@@ -229,7 +229,8 @@
       solEn: `${start}(1 + x)² = ${end} → (1 + x)² = ${end / start} → 1 + x = ${1 + r / 100} → x = ${r}%`, solZh: `设年增长率为 x：${start}(1 + x)² = ${end}，(1 + x)² = ${end / start}，x = ${r}%` });
   });
 
-  G.register('maths', 'word', 4, (y, d) => {
+  G.register('maths', 'word', 3, (y, d) => {
+    if (y < 4) { y = 4; d = 1; }   // Year 3 uses the easiest Year 4 templates
     const ok = T.filter(([my, md]) => my <= y && md <= Math.max(d, 1 + (y >= 7 ? 1 : 0)));
     // challenge/advanced: prefer the harder templates
     const pool = d >= 3 ? ok.filter(([my, md]) => md >= 2).concat(ok.filter(([my, md]) => md >= 3)) : ok;
@@ -239,5 +240,5 @@
     const tpl = pick(choices), q = tpl[2](y, d);
     if (q) { recent.push(tpl); if (recent.length > Math.min(6, ok.length - 1)) recent.shift(); }
     return q;
-  });
+  }, { maxYear: 10 });
 })(typeof window !== 'undefined' ? window : globalThis);
