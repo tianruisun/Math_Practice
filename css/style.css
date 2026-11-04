@@ -132,7 +132,10 @@ legend, .label { display: block; font-weight: 800; margin: 0 0 0.5rem; padding: 
 .chips-1 { grid-template-columns: 1fr; }
 .chips-2 { grid-template-columns: repeat(2, 1fr); }
 .chips-3 { grid-template-columns: repeat(3, 1fr); }
-.chips-4 { grid-template-columns: repeat(4, 1fr); }
+.chips-4 { grid-template-columns: repeat(2, 1fr); }  /* 2 × 2 on phones, one row on wider screens */
+@media (min-width: 640px) { .chips-4 { grid-template-columns: repeat(4, 1fr); } }
+.qhead:has(.marks) { justify-content: flex-start; }
+.badge.marks { margin-left: auto; }
 .chips-7 { grid-template-columns: repeat(4, 1fr); }
 @media (min-width: 30rem) { .chips-7 { grid-template-columns: repeat(7, 1fr); } }
 .chip { position: relative; }

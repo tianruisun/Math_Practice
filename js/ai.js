@@ -45,7 +45,7 @@
     1: 'Core – the standard textbook level for this year (China 人教版 / Singapore MOE), one or two steps',
     2: 'Standard – typical school exam questions for this year in China / Singapore, usually two or three steps',
     3: 'Advanced – TUTORING-CENTRE EXTENSION level (培优班 / selective & scholarship coaching): clearly harder than any school exam, multi-step and non-routine, combining ideas; do NOT keep to the school syllabus difficulty',
-    4: 'Challenge – OLYMPIAD level (top questions of the Australian Mathematics Competition, AMC 10/12, AIME-style, 奥数/数学竞赛): well beyond school standards, needs a clever idea (counting, number theory, invariants, symmetry, clever algebra, geometry insight); still with ONE exact numeric answer'
+    4: 'Challenge – OLYMPIAD level, as hard as the Australian Mathematical Olympiad (AMO) / AIMO and the hardest AMC questions (奥数/数学竞赛): far beyond school standards. Adapt AMO-style problems (find all n such that …, functional equations, Diophantine equations, tilings and counting, games and invariants, extremal problems, sequences) into questions with ONE exact whole-number answer, e.g. "find the sum of all n …" or "how many …". Each must need a genuine insight, not a routine method'
   };
 
   /* Years 1–12; 13 = Year 12 Extension 1 (3U); 14 = Year 12 Extension 2 (4U) */

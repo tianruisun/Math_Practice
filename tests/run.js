@@ -28,11 +28,11 @@ ok({ value: 7.33, tol: 1e-9 }, '7.33'); no({ value: 7.33, tol: 1e-9 }, '7.3349')
 
 /* every generated question: clean text; typed answers accept their own displayed answer; MC well-formed */
 require('../js/gen-core.js'); require('../js/gen-maths.js'); require('../js/gen-word.js'); require('../js/gen-junior.js');
-require('../js/gen-senior.js'); require('../js/gen-charts.js'); require('../js/gen-olympiad.js'); require('../js/gen-ga.js');
+require('../js/gen-senior.js'); require('../js/gen-charts.js'); require('../js/gen-olympiad.js'); require('../js/gen-amo.js'); require('../js/gen-ga.js');
 const G = globalThis.Gen;
 const FIGR = require('../js/figures.js');
 let gen = 0;
-const BAD = /undefined|NaN|Infinity|null|\[object|function/;
+const BAD = /undefined|NaN|Infinity|null|\[object|function\s*\(/;
 for (const subject of ['maths', 'ga']) for (const y of G.YEARS) for (const d of [1, 2, 3, 4]) for (const topic of ['mixed', ...G.topicsFor(subject, y)]) {
   const set = G.generateSet(subject, y, topic, d, 15);
   t(`set size ${subject} y${y} d${d} ${topic}`, () => assert.ok(set.length >= 8, 'got ' + set.length));
@@ -159,6 +159,44 @@ const good = AI.toQuestion({ topic: 'frac', question_en: 'What is 1/2 + 1/4?', q
 t('ai good item', () => { assert.ok(good); assert.strictEqual(good.value, 0.75); assert.ok(C.check(good, '6/8').ok); });
 t('ai rejects word answer', () => assert.strictEqual(AI.toQuestion({ topic: 'frac', question_en: 'a', question_zh: 'b', answer: 'three', unit: '' }, 6, 1, ['frac'], 'frac'), null));
 t('ai money unit', () => { const q = AI.toQuestion({ topic: 'pct', question_en: 'a', question_zh: 'b', answer: '12.5', unit: '$', solution_en: '', solution_zh: '' }, 8, 1, ['pct'], 'pct'); assert.strictEqual(q.answer, '$12.5'); assert.ok(C.check(q, '$12.50').ok); });
+
+/* AMO-level bank and competition papers */
+{
+  const O = globalThis.Olympiad;
+  t('amo templates exist', () => assert.ok(O.T.filter(x => x.amo).length >= 20));
+  t('tiling counts match known values', () => {
+    const D = [[0, 0], [0, 1]], SQ = [[0, 0], [0, 1], [1, 0], [1, 1]];
+    assert.strictEqual(O.tilings(2, 8, [D]), 34); assert.strictEqual(O.tilings(3, 8, [D]), 153);
+    assert.strictEqual(O.tilings(4, 4, [D]), 36); assert.strictEqual(O.tilings(2, 10, [D, SQ]), 683);
+  });
+  t('amo answers are whole numbers 0-999', () => {
+    O.T.filter(x => x.amo).forEach(tpl => { for (let k = 0; k < 20; k++) { const q = tpl.fn(); if (q) assert.ok(Number.isInteger(q.value) && q.value >= 0 && q.value <= 999, q.q.en); } });
+  });
+  t('challenge high school sets use AMO problems', () => {
+    let a = 0; for (let k = 0; k < 200; k++) { const q = O.generate(9, 4); if (q && /power of 2|f\(f\(n\)\)|tiled|second player|ordered pairs|consecutive positive|subsets|chairs|strictly inside|perimeter|cannot be bought|digit sums|divisible by n \+|written in a row|exactly \d+ positive divisors|ordered triples|a₁, a₂|right-angled|different numbers appear/.test(q.q.en)) a++; }
+    assert.ok(a > 80, 'amo share ' + a);
+  });
+  const CP = require('../js/gen-comp.js');
+  for (const paper of Object.keys(CP.PAPERS)) for (const len of ['full', 'short']) {
+    t(`competition ${paper} ${len}`, () => {
+      for (let k = 0; k < 5; k++) {
+        const qs = CP.buildPaper(paper, len), lay = CP.layout(paper, len);
+        assert.strictEqual(qs.length, lay.length);
+        assert.strictEqual(CP.totalMarks(qs), lay.reduce((m, x) => m + x[1], 0));
+        qs.forEach((q, i) => {
+          assert.ok(!BAD.test(q.q.en + q.q.zh), 'text');
+          if (lay[i][0][0] === 'N') { assert.ok(q.intAnswer && Number.isInteger(q.value) && q.value >= 0 && q.value <= 999); assert.ok(C.check(q, String(q.value)).ok); }
+          else { assert.strictEqual(q.type, 'mc'); assert.strictEqual(new Set(q.choices.map(c => c.en)).size, 5); assert.ok(q.correct >= 0 && q.correct < 5); }
+        });
+      }
+    });
+  }
+  t('competition marks', () => {
+    assert.strictEqual(CP.totalMarks(CP.buildPaper('amc_j', 'full')), 135);
+    assert.strictEqual(CP.totalMarks(CP.buildPaper('aimo', 'full')), 35);
+    assert.strictEqual(CP.minutes('amc_mp', 'full'), 60); assert.strictEqual(CP.minutes('amc_s', 'full'), 75); assert.strictEqual(CP.minutes('aimo', 'full'), 240);
+  });
+}
 
 console.log(`${pass} passed, ${fail} failed (${gen} generated questions checked)`);
 process.exit(fail ? 1 : 0);
