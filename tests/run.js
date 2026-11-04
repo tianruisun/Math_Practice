@@ -1,7 +1,6 @@
 /* Run with: node tests/run.js */
 const assert = require('assert');
 const C = require('../js/checker.js');
-const G = require('../js/generator.js');
 let pass = 0, fail = 0;
 function t(name, fn) { try { fn(); pass++; } catch (e) { fail++; console.log('FAIL', name, '-', e.message); } }
 const ok = (q, s) => t(`accept ${JSON.stringify(s)} for ${q.value}${q.unit || ''}`, () => assert.ok(C.check(q, s).ok, JSON.stringify(C.check(q, s))));
@@ -27,28 +26,55 @@ const pct = { value: 35, unit: '%' }; ['35', '35%', '35 %', '35 percent'].forEac
 ok({ value: 4, unit: '' }, '4个'); ok({ value: 4, unit: '' }, '4.'); ok({ value: 4 }, '答案：4');
 ok({ value: 7.33, tol: 1e-9 }, '7.33'); no({ value: 7.33, tol: 1e-9 }, '7.3349');
 
-/* every generated question must accept its own displayed answer, and the text must be clean */
+/* every generated question: clean text; typed answers accept their own displayed answer; MC well-formed */
+require('../js/gen-core.js'); require('../js/gen-maths.js'); require('../js/gen-word.js'); require('../js/gen-ga.js');
+const G = globalThis.Gen;
 let gen = 0;
-for (const y of [4, 5, 6, 7, 8, 9, 10]) for (const d of [1, 2, 3]) for (const topic of ['mixed', ...G.topicsFor(y)]) {
-  const set = G.generateSet(y, topic, d, 20);
-  t(`set size y${y} d${d} ${topic}`, () => assert.ok(set.length >= 10, 'got ' + set.length));
+const BAD = /undefined|NaN|Infinity|null|\[object|function/;
+for (const subject of ['maths', 'ga']) for (const y of [4, 5, 6, 7, 8, 9, 10]) for (const d of [1, 2, 3, 4]) for (const topic of ['mixed', ...G.topicsFor(subject, y)]) {
+  const set = G.generateSet(subject, y, topic, d, 15);
+  t(`set size ${subject} y${y} d${d} ${topic}`, () => assert.ok(set.length >= 8, 'got ' + set.length));
+  if (subject === 'maths' && topic === 'mixed') t(`mixed has word problems y${y} d${d}`, () => assert.ok(set.filter(q => q.topic === 'word').length >= 3));
   for (const q of set) {
     gen++;
-    const id = `y${y} d${d} ${q.topic}: ${q.q.en}`;
+    const id = `${subject} y${y} d${d} ${q.topic}: ${q.q.en}`;
     t(id + ' clean', () => {
-      for (const s of [q.q.en, q.q.zh, q.sol.en, q.sol.zh, q.answer]) assert.ok(!/undefined|NaN|Infinity|null|\[object/.test(s), s);
-      assert.ok(Number.isFinite(q.value));
-      assert.ok(G.TOPICS[q.topic] <= y, 'topic above year');
+      const texts = [q.q.en, q.q.zh, q.sol.en, q.sol.zh, ...(q.type === 'mc' ? q.choices.flatMap(c => [c.en, c.zh]) : [q.answer])];
+      for (const s of texts) assert.ok(typeof s === 'string' && s.length && !BAD.test(s), JSON.stringify(s));
+      assert.strictEqual(q.subject, subject);
+      assert.ok(G.SUBJECTS[subject][q.topic].minYear <= y, 'topic above year');
       if (topic !== 'mixed') assert.strictEqual(q.topic, topic);
     });
-    t(id + ' self-check ' + q.answer, () => assert.ok(C.check(q, q.answer).ok, JSON.stringify(C.check(q, q.answer))));
+    if (q.type === 'mc') {
+      t(id + ' mc', () => {
+        assert.ok(q.choices.length >= 3 && q.choices.length <= 5, 'options ' + q.choices.length);
+        assert.ok(Number.isInteger(q.correct) && q.correct >= 0 && q.correct < q.choices.length);
+        assert.strictEqual(new Set(q.choices.map(c => c.en)).size, q.choices.length, 'duplicate options');
+      });
+    } else {
+      t(id + ' self-check ' + q.answer, () => {
+        assert.ok(Number.isFinite(q.value));
+        assert.ok(C.check(q, q.answer).ok, JSON.stringify(C.check(q, q.answer)));
+      });
+    }
   }
 }
+/* GA option count is normally 4 */
+t('ga mostly 4 options', () => {
+  const qs = G.generateSet('ga', 8, 'mixed', 3, 200);
+  assert.ok(qs.filter(q => q.choices.length === 4).length / qs.length > 0.95);
+});
 
 /* AI item validation */
 global.window = undefined; global.Checker = C;
 const AI = require('../js/ai.js');
 globalThis.Checker = C;
+t('ai mc item', () => {
+  const q = AI.toMcQuestion({ topic: 'gseries', question_en: 'Next? 2, 4, 8, ?', question_zh: '下一个？2，4，8，？', choices_en: ['10', '12', '16', '14'], choices_zh: ['10', '12', '16', '14'], correct_index: 2, solution_en: 'x2', solution_zh: '乘2' }, 6, 2, ['gseries'], 'mixed');
+  assert.ok(q && q.type === 'mc' && q.correct === 2 && q.choices[2].zh === '16');
+  assert.strictEqual(AI.toMcQuestion({ question_en: 'a', question_zh: 'b', choices_en: ['1', '2'], choices_zh: ['1', '2'], correct_index: 0 }, 6, 2, ['gseries'], 'mixed'), null);
+  assert.strictEqual(AI.toMcQuestion({ question_en: 'a', question_zh: 'b', choices_en: ['1', '2', '3', '4'], choices_zh: ['1', '2', '3', '4'], correct_index: 7 }, 6, 2, ['gseries'], 'mixed'), null);
+});
 const good = AI.toQuestion({ topic: 'frac', question_en: 'What is 1/2 + 1/4?', question_zh: '1/2 + 1/4 等于多少？', answer: '3/4', unit: '', solution_en: 's', solution_zh: 's' }, 6, 1, ['frac'], 'mixed');
 t('ai good item', () => { assert.ok(good); assert.strictEqual(good.value, 0.75); assert.ok(C.check(good, '6/8').ok); });
 t('ai rejects word answer', () => assert.strictEqual(AI.toQuestion({ topic: 'frac', question_en: 'a', question_zh: 'b', answer: 'three', unit: '' }, 6, 1, ['frac'], 'frac'), null));

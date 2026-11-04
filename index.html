@@ -3,13 +3,13 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Maths Practice</title>
-  <meta name="description" content="Maths practice for Years 4 to 10 in English and Simplified Chinese.">
+  <title>Maths &amp; Reasoning</title>
+  <meta name="description" content="Maths and reasoning practice for Years 4 to 10 in English and Simplified Chinese.">
   <meta name="theme-color" content="#0b3d91">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Maths">
+  <meta name="apple-mobile-web-app-title" content="Maths &amp; Reasoning">
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
@@ -22,7 +22,7 @@
     <div class="brand">
       <img src="./icons/icon.svg" alt="" width="36" height="36">
       <div>
-        <h1 data-i18n="app.title">Maths Practice</h1>
+        <h1 data-i18n="app.title">Maths &amp; Reasoning</h1>
         <p class="tagline" data-i18n="app.tagline">Years 4 to 10</p>
       </div>
     </div>
@@ -43,6 +43,12 @@
       <h2 id="homeH" data-i18n="home.heading">Set up your practice</h2>
 
       <fieldset>
+        <legend data-i18n="home.subject">Subject</legend>
+        <div class="chips chips-2 subject" id="subjectChips"></div>
+        <p class="muted small note" id="subjectNote"></p>
+      </fieldset>
+
+      <fieldset>
         <legend data-i18n="home.year">Year level</legend>
         <div class="chips chips-7" id="yearChips"></div>
       </fieldset>
@@ -54,7 +60,7 @@
 
       <fieldset>
         <legend data-i18n="home.diff">Difficulty</legend>
-        <div class="chips chips-3" id="diffChips"></div>
+        <div class="chips chips-4 diff" id="diffChips"></div>
       </fieldset>
 
       <fieldset>
@@ -83,8 +89,14 @@
       <div class="bar" aria-hidden="true"><div id="qBar"></div></div>
 
       <h2 id="qText" class="question" aria-live="polite"></h2>
+      <p id="qTip" class="tip small" data-i18n="quiz.wordTip" hidden></p>
 
       <form id="answerForm" autocomplete="off" novalidate>
+        <div id="choiceArea" hidden>
+          <p class="label" id="chooseLabel" data-i18n="quiz.choose">Choose one answer</p>
+          <div id="choices" class="choices" role="radiogroup" aria-labelledby="chooseLabel"></div>
+        </div>
+        <div id="inputArea">
         <label for="answer" class="label" data-i18n="quiz.label">Your answer</label>
         <input id="answer" name="answer" type="text" inputmode="text" autocomplete="off" autocorrect="off"
                autocapitalize="off" spellcheck="false" enterkeyhint="done" data-i18n-placeholder="quiz.placeholder">
@@ -96,6 +108,7 @@
           <button type="button" class="key" data-key="back" aria-label="Backspace">⌫</button>
         </div>
         <p class="muted small" data-i18n="quiz.hint">Fractions like 3/4 or 1 1/2. Units are optional.</p>
+        </div>
         <p id="feedback" class="feedback" role="status" aria-live="assertive"></p>
         <p id="parentAnswer" class="parent-box" hidden></p>
         <button type="submit" id="checkBtn" class="btn primary" data-i18n="quiz.check">Check answer</button>
@@ -173,7 +186,10 @@
 
   <script src="./js/i18n.js"></script>
   <script src="./js/checker.js"></script>
-  <script src="./js/generator.js"></script>
+  <script src="./js/gen-core.js"></script>
+  <script src="./js/gen-maths.js"></script>
+  <script src="./js/gen-word.js"></script>
+  <script src="./js/gen-ga.js"></script>
   <script src="./js/ai.js"></script>
   <script src="./js/app.js"></script>
 </body>

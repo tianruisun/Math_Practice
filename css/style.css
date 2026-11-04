@@ -261,3 +261,39 @@ dialog::backdrop { background: rgba(5, 15, 30, 0.7); }
 @media (forced-colors: active) {
   .chip input:checked + span { outline: 3px solid CanvasText; }
 }
+
+/* ---------- subjects, multiple choice, word-problem tip ---------- */
+.subject .chip span { min-height: 60px; font-size: 1.05rem; }
+.note { margin: 0.45rem 0 0; }
+.diff .chip span { padding: 0.35rem 0.25rem; font-size: 0.95rem; }
+.tip { background: var(--pri-soft); color: var(--ink); border-left: 5px solid var(--pri); border-radius: 10px; padding: 0.5rem 0.75rem; margin: 0.7rem 0 0; }
+.question { white-space: pre-line; }
+.choices { display: grid; gap: 0.55rem; }
+.choice {
+  display: flex; align-items: center; gap: 0.75rem; width: 100%;
+  min-height: 58px; padding: 0.55rem 0.8rem;
+  border: 2px solid var(--line); border-radius: var(--radius);
+  background: var(--card); color: var(--ink);
+  font: inherit; font-weight: 700; font-size: 1.15rem; text-align: left; cursor: pointer;
+}
+.choice .letter {
+  flex: none; width: 2.1rem; height: 2.1rem; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--pri-soft); color: var(--pri); font-weight: 900;
+}
+.choice[aria-checked="true"] { border-color: var(--pri); background: var(--pri); color: #fff; }
+.choice[aria-checked="true"] .letter { background: #fff; }
+.choice:disabled { cursor: default; opacity: 1; }
+.choice.is-correct { border-color: var(--ok); box-shadow: inset 0 0 0 2px var(--ok); }
+
+/* longer app name: keep the header tidy on small phones */
+.brand > div { min-width: 0; }
+.brand h1 { overflow-wrap: anywhere; }
+@media (max-width: 380px) {
+  .top { gap: 0.4rem; }
+  .brand { gap: 0.45rem; }
+  .brand img { width: 30px; height: 30px; }
+  .brand h1 { font-size: 1rem; }
+  .tagline { font-size: 0.75rem; }
+  .pill { padding: 0 0.6rem; font-size: 0.9rem; }
+}
