@@ -1,26 +1,180 @@
-<!doctype html><html lang="en"><head><meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Maths Practice</title><meta name="theme-color" content="#0b3d91">
-<meta name="apple-mobile-web-app-capable" content="yes"><meta name="mobile-web-app-capable" content="yes"><meta name="apple-mobile-web-app-title" content="Maths">
-<link rel="manifest" href="./manifest.webmanifest"><link rel="apple-touch-icon" href="./icons/icon-192.png"><link rel="icon" href="./icons/icon-192.png">
-<link rel="stylesheet" href="./style.css"></head><body>
-<header><h1 data-i18n="app.title"></h1><nav><button id="nHome" data-i18n="nav.home"></button><button id="nProg" data-i18n="nav.progress"></button><button id="lang" aria-label="Language">中文</button></nav></header>
-<main>
-<section id="home"><label for="year" data-i18n="home.year"></label><select id="year"></select>
-<label for="topic" data-i18n="home.topic"></label><select id="topic"></select>
-<label for="diff" data-i18n="home.diff"></label><select id="diff"></select>
-<label for="count" data-i18n="home.count"></label><select id="count"></select>
-<button id="start" class="primary" data-i18n="home.start"></button></section>
-<section id="quiz" hidden><p id="prog"></p><h2 id="qtext"></h2>
-<input id="ans" type="text" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" enterkeyhint="done" data-i18n-ph="quiz.ph">
-<p class="sub" data-i18n="quiz.hint"></p><p id="fb" role="status"></p>
-<button id="check" class="primary" data-i18n="quiz.check"></button><button id="next" class="primary" hidden></button>
-<button id="quit" class="ghost" data-i18n="quiz.quit"></button></section>
-<section id="results" hidden><h2 data-i18n="res.title"></h2><p id="score" class="big"></p>
-<button id="parent" class="ghost"></button><ol id="list"></ol>
-<button id="again" class="primary" data-i18n="res.again"></button><button id="toHome" class="ghost" data-i18n="res.home"></button></section>
-<section id="progress" hidden><h2 data-i18n="prog.title"></h2><div id="pbody"></div><button id="reset" class="ghost" data-i18n="prog.reset"></button></section>
-</main>
-<dialog id="pinDlg"><h3 id="pinTitle"></h3><input id="pinIn" type="password" inputmode="numeric" maxlength="4" autocomplete="off"><p id="pinMsg" class="bad"></p>
-<div class="row"><button id="pinCancel" class="ghost" data-i18n="pin.cancel"></button><button id="pinOk" class="primary" data-i18n="pin.ok"></button></div></dialog>
-<script src="./i18n.js"></script><script src="./engine.js"></script><script src="./app.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Maths Practice</title>
+  <meta name="description" content="Maths practice for Years 4 to 10 in English and Simplified Chinese.">
+  <meta name="theme-color" content="#0b3d91">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Maths">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
+  <link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
+  <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+  <header class="top">
+    <div class="brand">
+      <img src="./icons/icon.svg" alt="" width="36" height="36">
+      <div>
+        <h1 data-i18n="app.title">Maths Practice</h1>
+        <p class="tagline" data-i18n="app.tagline">Years 4 to 10</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button type="button" id="langBtn" class="pill" data-i18n="lang.switch" data-i18n-aria="lang.label">中文</button>
+      <button type="button" id="parentBtn" class="pill" aria-pressed="false"><span id="parentIcon" aria-hidden="true">🔒</span> <span id="parentLabel" data-i18n="nav.parent">Parent</span></button>
+    </div>
+  </header>
+
+  <nav class="tabs" aria-label="Main">
+    <button type="button" class="tab" data-go="home" data-i18n="nav.home">Home</button>
+    <button type="button" class="tab" data-go="progress" data-i18n="nav.progress">Progress</button>
+  </nav>
+
+  <main id="main" tabindex="-1">
+    <!-- HOME -->
+    <section id="screen-home" class="screen" aria-labelledby="homeH">
+      <h2 id="homeH" data-i18n="home.heading">Set up your practice</h2>
+
+      <fieldset>
+        <legend data-i18n="home.year">Year level</legend>
+        <div class="chips chips-7" id="yearChips"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend data-i18n="home.topic">Topic</legend>
+        <div class="chips chips-2" id="topicChips"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend data-i18n="home.diff">Difficulty</legend>
+        <div class="chips chips-3" id="diffChips"></div>
+      </fieldset>
+
+      <fieldset>
+        <legend data-i18n="home.count">Number of questions</legend>
+        <div class="chips chips-4" id="countChips"></div>
+      </fieldset>
+
+      <p class="source" id="sourceLine"></p>
+      <button type="button" id="startBtn" class="btn primary" data-i18n="home.start">Start practice</button>
+    </section>
+
+    <!-- LOADING -->
+    <section id="screen-loading" class="screen" hidden>
+      <div class="loading">
+        <div class="spinner" aria-hidden="true"></div>
+        <p id="loadingText" role="status"></p>
+      </div>
+    </section>
+
+    <!-- QUIZ -->
+    <section id="screen-quiz" class="screen" hidden aria-labelledby="qText">
+      <div class="quiz-head">
+        <p id="qProgress" class="muted"></p>
+        <p id="qTopic" class="badge"></p>
+      </div>
+      <div class="bar" aria-hidden="true"><div id="qBar"></div></div>
+
+      <h2 id="qText" class="question" aria-live="polite"></h2>
+
+      <form id="answerForm" autocomplete="off" novalidate>
+        <label for="answer" class="label" data-i18n="quiz.label">Your answer</label>
+        <input id="answer" name="answer" type="text" inputmode="text" autocomplete="off" autocorrect="off"
+               autocapitalize="off" spellcheck="false" enterkeyhint="done" data-i18n-placeholder="quiz.placeholder">
+        <div class="keys" role="group" aria-label="Extra keys">
+          <button type="button" class="key" data-key="/">/</button>
+          <button type="button" class="key" data-key="-">−</button>
+          <button type="button" class="key" data-key=".">.</button>
+          <button type="button" class="key" data-key=" " data-i18n="key.space">space</button>
+          <button type="button" class="key" data-key="back" aria-label="Backspace">⌫</button>
+        </div>
+        <p class="muted small" data-i18n="quiz.hint">Fractions like 3/4 or 1 1/2. Units are optional.</p>
+        <p id="feedback" class="feedback" role="status" aria-live="assertive"></p>
+        <p id="parentAnswer" class="parent-box" hidden></p>
+        <button type="submit" id="checkBtn" class="btn primary" data-i18n="quiz.check">Check answer</button>
+        <button type="button" id="nextBtn" class="btn primary" hidden></button>
+      </form>
+      <button type="button" id="quitBtn" class="btn ghost" data-i18n="quiz.quit">Quit</button>
+    </section>
+
+    <!-- RESULTS -->
+    <section id="screen-results" class="screen" hidden aria-labelledby="resH">
+      <h2 id="resH" data-i18n="res.heading">Results</h2>
+      <div class="score-card">
+        <p id="resScore" class="score"></p>
+        <p id="resMsg"></p>
+      </div>
+      <p id="resLocked" class="muted" data-i18n="res.locked"></p>
+      <button type="button" id="unlockBtn" class="btn secondary" data-i18n="res.unlock">Parent: show answers</button>
+      <ol id="resList" class="review"></ol>
+      <button type="button" id="againBtn" class="btn primary" data-i18n="res.again">Practise again</button>
+      <button type="button" id="homeBtn" class="btn ghost" data-i18n="res.home">Change settings</button>
+    </section>
+
+    <!-- PROGRESS -->
+    <section id="screen-progress" class="screen" hidden aria-labelledby="progH">
+      <h2 id="progH" data-i18n="prog.heading">Progress</h2>
+      <div id="progBody"></div>
+    </section>
+
+    <!-- PARENT SETTINGS -->
+    <section id="screen-parent" class="screen" hidden aria-labelledby="parH">
+      <h2 id="parH" data-i18n="parent.heading">Parent settings</h2>
+
+      <div class="card">
+        <h3 data-i18n="parent.aiHeading">Question source</h3>
+        <p class="muted small" data-i18n="parent.aiInfo"></p>
+        <fieldset>
+          <legend data-i18n="parent.provider">Provider</legend>
+          <div class="chips chips-1" id="providerChips"></div>
+        </fieldset>
+        <div id="aiFields">
+          <label class="label" for="aiKey" data-i18n="parent.key">API key</label>
+          <input id="aiKey" type="password" autocomplete="off" spellcheck="false" data-i18n-placeholder="parent.keyPh">
+          <label class="label" for="aiModel" data-i18n="parent.model">Model</label>
+          <select id="aiModel"></select>
+          <button type="button" id="aiTest" class="btn secondary" data-i18n="parent.test">Test connection</button>
+        </div>
+        <p id="aiMsg" class="small" role="status"></p>
+        <button type="button" id="aiSave" class="btn primary" data-i18n="parent.save">Save</button>
+      </div>
+
+      <div class="card">
+        <h3 data-i18n="parent.pinHeading">Parent PIN</h3>
+        <p class="muted small" data-i18n="pin.note"></p>
+        <button type="button" id="changePin" class="btn secondary" data-i18n="parent.changePin">Change PIN</button>
+      </div>
+
+      <button type="button" id="lockBtn" class="btn ghost" data-i18n="parent.lock">Lock parent mode</button>
+    </section>
+  </main>
+
+  <dialog id="pinDialog" aria-labelledby="pinTitle">
+    <form method="dialog" id="pinForm" novalidate>
+      <h3 id="pinTitle"></h3>
+      <input id="pinInput" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" autocomplete="off" aria-labelledby="pinTitle">
+      <p id="pinMsg" class="bad small" role="alert"></p>
+      <div class="row">
+        <button type="button" id="pinCancel" class="btn ghost" data-i18n="pin.cancel">Cancel</button>
+        <button type="submit" id="pinOk" class="btn primary" data-i18n="pin.ok">OK</button>
+      </div>
+      <button type="button" id="pinForgot" class="link small" data-i18n="pin.forgot">Forgot PIN?</button>
+    </form>
+  </dialog>
+
+  <div id="toast" class="toast" role="status" hidden></div>
+
+  <script src="./js/i18n.js"></script>
+  <script src="./js/checker.js"></script>
+  <script src="./js/generator.js"></script>
+  <script src="./js/ai.js"></script>
+  <script src="./js/app.js"></script>
+</body>
+</html>
