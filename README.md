@@ -1,6 +1,6 @@
-# Maths Practice · 数学练习 (Years 4–10)
+# Maths & Reasoning · 数学与思维 (Years 4–10)
 
-A mobile-first, installable maths practice web app (PWA) for students in Years 4 to 10.
+A mobile-first, installable maths and reasoning practice web app (PWA) for students in Years 4 to 10.
 Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so it runs on GitHub Pages as-is.
 
 ## Features
@@ -21,7 +21,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 ## Publish on GitHub Pages
 1. Push to GitHub. In the repo: **Settings → Pages → Build and deployment → Deploy from a branch**, pick your branch and `/ (root)`.
 2. Open `https://<user>.github.io/<repo>/`. On a phone use **Add to Home Screen** / **Install app**.
-3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v4` → `maths-v5`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
+3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v5` → `maths-v6`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
 
 ## AI keys
 - Claude: create a key at console.anthropic.com. Default model `claude-opus-5-5`; `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper/faster options in settings.

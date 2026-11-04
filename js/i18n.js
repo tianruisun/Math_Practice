@@ -5,7 +5,7 @@
 
   const STRINGS = {
     en: {
-      'app.title': 'Maths Practice',
+      'app.title': 'Maths & Reasoning',
       'app.tagline': 'Years 4 to 10',
       'nav.home': 'Home',
       'nav.progress': 'Progress',
@@ -156,7 +156,7 @@
     },
 
     zh: {
-      'app.title': '数学练习',
+      'app.title': '数学与思维',
       'app.tagline': '4–10 年级',
       'nav.home': '首页',
       'nav.progress': '学习进度',

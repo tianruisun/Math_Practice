@@ -285,3 +285,15 @@ dialog::backdrop { background: rgba(5, 15, 30, 0.7); }
 .choice[aria-checked="true"] .letter { background: #fff; }
 .choice:disabled { cursor: default; opacity: 1; }
 .choice.is-correct { border-color: var(--ok); box-shadow: inset 0 0 0 2px var(--ok); }
+
+/* longer app name: keep the header tidy on small phones */
+.brand > div { min-width: 0; }
+.brand h1 { overflow-wrap: anywhere; }
+@media (max-width: 380px) {
+  .top { gap: 0.4rem; }
+  .brand { gap: 0.45rem; }
+  .brand img { width: 30px; height: 30px; }
+  .brand h1 { font-size: 1rem; }
+  .tagline { font-size: 0.75rem; }
+  .pill { padding: 0 0.6rem; font-size: 0.9rem; }
+}
