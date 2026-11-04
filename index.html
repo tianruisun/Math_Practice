@@ -45,7 +45,7 @@
 
       <fieldset>
         <legend data-i18n="home.subject">Subject</legend>
-        <div class="chips chips-3 subject" id="subjectChips"></div>
+        <div class="chips chips-4 subject" id="subjectChips"></div>
         <p class="muted small note" id="subjectNote"></p>
       </fieldset>
 
@@ -90,6 +90,21 @@
         <div class="field">
           <label class="label" for="selLenSel" data-i18n="sel.length">Test length</label>
           <select id="selLenSel" class="combo"></select>
+        </div>
+      </div>
+
+      <div id="compOptions" hidden>
+        <div class="card sel-card">
+          <h3 data-i18n="comp.heading">Competition paper</h3>
+          <ul class="rules" id="compRules"></ul>
+        </div>
+        <div class="field">
+          <label class="label" for="compPaperSel" data-i18n="comp.paper">Paper</label>
+          <select id="compPaperSel" class="combo"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="compLenSel" data-i18n="sel.length">Test length</label>
+          <select id="compLenSel" class="combo"></select>
         </div>
       </div>
 
@@ -265,9 +280,11 @@
   <script src="./js/gen-junior.js"></script>
   <script src="./js/gen-senior.js"></script>
   <script src="./js/gen-charts.js"></script>
-  <script src="./js/gen-olympiad.js"></script>
+  <script src="js/gen-olympiad.js"></script>
+  <script src="./js/gen-amo.js"></script>
   <script src="./js/gen-ga.js"></script>
-  <script src="./js/gen-selective.js"></script>
+  <script src="js/gen-selective.js"></script>
+  <script src="./js/gen-comp.js"></script>
   <script src="./js/ai.js"></script>
   <script src="./js/app.js"></script>
 </body>

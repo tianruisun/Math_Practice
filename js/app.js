@@ -50,7 +50,9 @@
   const schoolOf = y => (y <= 6 ? 'primary' : 'high');
   const COUNTS = [1, 5, 10, 15, 20];
   const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10, selLen: 'full', view: 'single' };
-  const SUBJECTS = ['maths', 'ga', 'sel'];
+  const SUBJECTS = ['maths', 'ga', 'sel', 'comp'];
+  const AI_SUBJECTS = ['maths', 'ga', 'sel'];
+  const isTimed = sub => sub === 'sel' || sub === 'comp';
   const S = {
     screen: 'home',
     settings: Object.assign({}, defaults, store.get(Profiles.setKey(), {})),
@@ -134,13 +136,15 @@
     if (!YEARS.includes(st.year)) st.year = 6;
     if (st.topic !== 'mixed' && !Gen.topicsFor(st.subject, st.year).includes(st.topic)) st.topic = 'mixed';
     chips($('#subjectChips'), 'subject', SUBJECTS.map(s => [s, t('subject.' + s)]), st.subject, v => { st.subject = v; st.topic = 'mixed'; saveSettings(); renderHome(); });
-    $('#subjectNote').textContent = t(st.subject === 'ga' ? 'home.gaNote' : st.subject === 'sel' ? 'home.selNote' : 'home.levelNote');
-    const isSel = st.subject === 'sel';
-    $('#practiceOptions').hidden = isSel;
+    $('#subjectNote').textContent = t(st.subject === 'ga' ? 'home.gaNote' : st.subject === 'sel' ? 'home.selNote' : st.subject === 'comp' ? 'home.compNote' : 'home.levelNote');
+    const isSel = st.subject === 'sel', isComp = st.subject === 'comp';
+    $('#practiceOptions').hidden = isSel || isComp;
     $('#selOptions').hidden = !isSel;
+    $('#compOptions').hidden = !isComp;
+    if (isComp) renderCompOptions();
     if (!['full', 'short'].includes(st.selLen)) st.selLen = 'full';
     combo($('#selLenSel'), ['full', 'short'].map(k => [k, t('sel.len.' + k)]), st.selLen, v => { st.selLen = v; saveSettings(); });
-    $('#startBtn').textContent = t(isSel ? 'sel.start' : 'home.start');
+    $('#startBtn').textContent = t(isSel ? 'sel.start' : isComp ? 'comp.start' : 'home.start');
     if (!YEARS.includes(st.year)) st.year = 6;
     const school = schoolOf(st.year);
     combo($('#schoolSel'), ['primary', 'high'].map(k => [k, t('school.' + k)]), school, v => {
@@ -161,6 +165,30 @@
     $('#sourceLine').textContent = ai ? t('home.source.ai', { name: AI.PROVIDERS[ai.provider].name }) : t('home.source.local');
   }
 
+  /* ---------- competition paper options (AMC divisions / AIMO) ---------- */
+  const compPaper = st => (Competition.PAPERS[st.compPaper] ? st.compPaper : Competition.paperForYear(st.year));
+  const compLen = st => (st.compLen === 'short' ? 'short' : 'full');
+  function compRules(paper, len) {
+    const lay = Competition.layout(paper, len), n = lay.length, m = Competition.minutes(paper, len);
+    const mc = lay.filter(x => x[0][0] !== 'N').length, total = lay.reduce((a, x) => a + x[1], 0), groups = [];
+    lay.forEach(([, mk], i) => { const g = groups[groups.length - 1]; if (g && g.mk === mk) g.b = i + 1; else groups.push({ a: i + 1, b: i + 1, mk }); });
+    const marks = groups.map(g => (g.a === g.b ? 'Q' + g.a : `Q${g.a}–${g.b}`) + ': ' + g.mk).join(', ');
+    return [
+      t('comp.rule.time', { n, m: m >= 120 ? t('comp.hours', { h: m / 60 }) : t('comp.minutes', { m }) }),
+      mc ? t('comp.rule.mixed', { a: mc, b: mc + 1, n }) : t('comp.rule.int'),
+      t('comp.rule.marks', { marks, total }),
+      t(Competition.PAPERS[paper].kind === 'aimo' ? 'comp.rule.aimo' : 'comp.rule.amc'),
+      t('comp.rule.note')
+    ];
+  }
+  function renderCompOptions() {
+    const st = S.settings, paper = compPaper(st), len = compLen(st);
+    combo($('#compPaperSel'), Object.keys(Competition.PAPERS).map(k => [k, t('topic.' + k)]), paper, v => { st.compPaper = v; saveSettings(); renderHome(); });
+    combo($('#compLenSel'), ['full', 'short'].map(k => [k, t('comp.len.' + k)]), len, v => { st.compLen = v; saveSettings(); renderHome(); });
+    const ul = $('#compRules'); ul.innerHTML = '';
+    compRules(paper, len).forEach(r => ul.append(el('li', '', r)));
+  }
+
   /* ---------- starting a quiz ---------- */
   function aiConfig() {
     const c = store.get(K.ai, null);
@@ -169,7 +197,7 @@
   function topicNames(subject, year) { return Gen.topicsFor(subject, year).map(k => [k, window.I18N.STRINGS.en['topic.' + k]]); }
 
   async function startQuiz(settings) {
-    if (settings.subject === 'sel') return startTest(settings);
+    if (isTimed(settings.subject)) return startTest(settings);
     S.loadingKey = 'loading.ai';
     const { year, topic, diff, count } = settings, subject = settings.subject || 'maths';
     S.lastQuizSettings = Object.assign({}, settings);
@@ -289,6 +317,7 @@
     card.setAttribute('aria-labelledby', 'qt' + i);
     const head = el('div', 'qhead');
     head.append(el('span', 'qnum', String(i + 1)), el('span', 'badge', t('topic.' + q.topic)));
+    if (q.marks) head.append(el('span', 'badge marks', t('comp.marks', { m: q.marks })));
     const text = el('div', 'question'); text.innerHTML = Fig.questionHTML(qText(q)); text.id = 'qt' + i;
     card.append(head, text);
     if (q.fig && window.Fig) { const f = el('div', 'figwrap'); f.innerHTML = Fig.render(q.fig, lang()); card.append(f); }
@@ -321,16 +350,29 @@
       const form = el('form', 'answer-form'); form.noValidate = true; form.autocomplete = 'off';
       const lab = el('label', 'label', t('quiz.label')); lab.htmlFor = 'ans' + i;
       const inp = el('input', 'answer'); inp.id = 'ans' + i; inp.type = 'text';
-      Object.assign(inp, { inputMode: 'text', autocomplete: 'off', spellcheck: false, placeholder: t('quiz.placeholder'), value: st.draft, disabled: done });
-      inp.setAttribute('autocorrect', 'off'); inp.setAttribute('autocapitalize', 'off'); inp.setAttribute('enterkeyhint', 'done');
-      inp.addEventListener('input', () => { st.draft = inp.value; });
+      Object.assign(inp, {
+        inputMode: q.intAnswer ? 'numeric' : 'text', autocomplete: 'off', spellcheck: false, placeholder: t(q.intAnswer ? 'comp.placeholder' : 'quiz.placeholder'),
+        value: Q.exam ? (Q.answers[i] === null ? '' : Q.answers[i]) : st.draft, disabled: done || (Q.exam && Q.finished)
+      });
+      inp.setAttribute('autocorrect', 'off'); inp.setAttribute('autocapitalize', 'off'); inp.setAttribute('enterkeyhint', Q.exam ? 'next' : 'done');
+      inp.addEventListener('input', () => {
+        if (!Q.exam) { st.draft = inp.value; return; }
+        if (Q.finished) return;
+        Q.answers[i] = inp.value.trim() ? inp.value.trim() : null;   // exam: saved as typed, marked when the paper is finished
+        renderChrome();
+      });
       form.append(lab, inp);
-      if (!done) {
+      if (Q.exam) form.append(el('p', 'muted small', t(q.intAnswer ? 'comp.intHint' : 'quiz.hint')));
+      else if (!done) {
         form.append(el('p', 'muted small', t('quiz.hint')));
         const chk = el('button', 'btn primary', t('quiz.check')); chk.type = 'submit';
         form.append(chk);
       }
-      form.addEventListener('submit', e => { e.preventDefault(); submitCard(i); });
+      form.addEventListener('submit', e => {
+        e.preventDefault();
+        if (!Q.exam) return submitCard(i);
+        if (view() === 'single' && Q.i < Q.questions.length - 1) { goToQuestion(Q.i + 1); focusCardInput(Q.i); }
+      });
       card.append(form);
     }
 
@@ -426,7 +468,23 @@
   function stopTimer() { if (timerId) { clearInterval(timerId); timerId = null; } }
   const mmss = ms => { const sec = Math.max(0, Math.round(ms / 1000)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
 
+  function beginExam(questions, minutes, settings) {
+    S.quiz = {
+      exam: true, questions, i: 0, page: 0, answers: Array(questions.length).fill(null), results: [], finished: false,
+      startedAt: Date.now(), limitMs: minutes * 60000, settings
+    };
+    go('quiz');
+    timerId = setInterval(tickTimer, 1000);
+    tickTimer();
+  }
+
   async function startTest(settings) {
+    if (settings.subject === 'comp') {   // competition papers come from the built-in banks (answers verified by brute force)
+      const paper = compPaper(settings), len = compLen(settings);
+      S.lastQuizSettings = Object.assign({}, settings);
+      return beginExam(Competition.buildPaper(paper, len), Competition.minutes(paper, len),
+        Object.assign({}, settings, { subject: 'comp', topic: paper, compPaper: paper, compLen: len }));
+    }
     const len = settings.selLen === 'short' ? 'short' : 'full', spec = len === 'short' ? Selective.SHORT : Selective.FULL;
     S.lastQuizSettings = Object.assign({}, settings);
     let questions = null;
@@ -444,14 +502,7 @@
       const fromAi = (questions || []).filter(q => q.tier === tier).slice(0, mix[k]);
       out.push(...fromAi, ...local.filter(q => q.tier === tier).slice(0, mix[k] - fromAi.length));
     });
-    S.quiz = {
-      exam: true, questions: out, i: 0, page: 0, answers: Array(out.length).fill(null), results: [], finished: false,
-      startedAt: Date.now(), limitMs: spec.minutes * 60000,
-      settings: Object.assign({}, settings, { subject: 'sel', topic: len === 'short' ? 'selshort' : 'selfull' })
-    };
-    go('quiz');
-    timerId = setInterval(tickTimer, 1000);
-    tickTimer();
+    beginExam(out, spec.minutes, Object.assign({}, settings, { subject: 'sel', topic: len === 'short' ? 'selshort' : 'selfull' }));
   }
 
   function tickTimer() {
@@ -467,7 +518,13 @@
     const Q = S.quiz; if (!Q || !Q.exam || Q.finished) return;
     Q.finished = true; stopTimer();
     Q.timeUsed = Math.min(Date.now() - Q.startedAt, Q.limitMs);
-    Q.results = Q.questions.map((q, i) => ({ given: Q.answers[i] === null ? [] : [Q.answers[i]], ok: Q.answers[i] === q.correct, tries: 1 }));
+    Q.results = Q.questions.map((q, i) => {
+      const a = Q.answers[i];
+      const ok = a !== null && (q.type === 'mc' ? a === q.correct : Checker.check(q, a).ok);
+      return { given: a === null ? [] : [a], ok, tries: 1 };
+    });
+    Q.marks = Q.questions.reduce((m, q, i) => m + (Q.results[i].ok ? q.marks || 0 : 0), 0);
+    Q.maxMarks = Q.questions.reduce((m, q) => m + (q.marks || 0), 0);
     saveSession();
     go('results');
     if (timeUp) toast(t('sel.timeUp'), 6000);
@@ -479,6 +536,10 @@
     if (settings.subject === 'sel') {
       const short = settings.selLen === 'short' || settings.topic === 'selshort', spec = short ? Selective.SHORT : Selective.FULL;
       return { title: `${t('sel.heading')} – ${t(short ? 'topic.selshort' : 'topic.selfull')}`, info: t('print.infoSel', { n, m: spec.minutes }) };
+    }
+    if (settings.subject === 'comp') {
+      const paper = compPaper(settings), len = compLen(settings);
+      return { title: `${t('subject.comp')} – ${t('topic.' + paper)}`, info: compRules(paper, len).slice(0, 3).join(' · ') };
     }
     const subject = settings.subject || 'maths';
     return {
@@ -539,6 +600,9 @@
     if (st.subject === 'sel') {
       const len = st.selLen === 'short' ? 'short' : 'full';
       openPrint(Selective.generateTest(len), Object.assign({}, st, { topic: len === 'short' ? 'selshort' : 'selfull' }));
+    } else if (st.subject === 'comp') {
+      const paper = compPaper(st), len = compLen(st);
+      openPrint(Competition.buildPaper(paper, len), Object.assign({}, st, { topic: paper, compPaper: paper, compLen: len }));
     } else {
       openPrint(Gen.generateSet(st.subject, st.year, st.topic, st.diff, st.count), Object.assign({}, st));
     }
@@ -576,7 +640,8 @@
     const h = store.get(histKey(), []);
     h.push({
       date: Date.now(), subject: Q.settings.subject, year: Q.settings.year, topic: Q.settings.topic, diff: Q.settings.diff,
-      n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong, time: Q.timeUsed || null
+      n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong, time: Q.timeUsed || null,
+      ...(Q.maxMarks ? { marks: Q.marks, maxMarks: Q.maxMarks } : {})
     });
     store.set(histKey(), h.slice(-100));
   }
@@ -586,7 +651,7 @@
     const Q = S.quiz; if (!Q) return go('home');
     const n = Q.questions.length, c = Q.results.filter(r => r && r.ok).length, pct = c / n;
     $('#resScore').textContent = t('res.score', { c, n });
-    $('#resMsg').textContent = t(pct >= 0.85 ? 'res.msg.great' : pct >= 0.6 ? 'res.msg.good' : 'res.msg.keep');
+    $('#resMsg').textContent = (Q.maxMarks ? t('comp.marksScore', { m: Q.marks, total: Q.maxMarks }) + ' ' : '') + t(pct >= 0.85 ? 'res.msg.great' : pct >= 0.6 ? 'res.msg.good' : 'res.msg.keep');
     renderExamSummary(Q);
     $('#resLocked').hidden = S.parent;
     $('#unlockBtn').hidden = S.parent;
@@ -637,8 +702,8 @@
     const ul = el('ul', 'plain');
     const fmtDate = d => new Date(d).toLocaleDateString(lang() === 'zh' ? 'zh-CN' : 'en-AU', { day: 'numeric', month: 'short' });
     h.slice(-8).reverse().forEach(x => ul.append(el('li', '', t('prog.row', {
-      date: fmtDate(x.date), year: x.subject === 'sel' ? '⏱ ' + mmss(x.time || 0) : yearLabel(x.year), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
-    }))));
+      date: fmtDate(x.date), year: isTimed(x.subject) ? '⏱ ' + mmss(x.time || 0) : yearLabel(x.year), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
+    }) + (x.maxMarks ? ' · ' + t('comp.marksShort', { m: x.marks, total: x.maxMarks }) : ''))));
     box.append(ul);
 
     box.append(el('h3', '', t('prog.review')));
@@ -772,7 +837,7 @@
   let promptSubject = 'maths';
   function renderPrompt() {
     const cfg = store.get(K.ai, {}) || {}, custom = cfg.prompts && cfg.prompts[promptSubject];
-    combo($('#promptSubject'), SUBJECTS.map(x => [x, t('subject.' + x)]), promptSubject, v => { promptSubject = v; renderPrompt(); });
+    combo($('#promptSubject'), AI_SUBJECTS.map(x => [x, t('subject.' + x)]), promptSubject, v => { promptSubject = v; renderPrompt(); });
     $('#promptText').value = custom || AI.defaultTemplate(promptSubject);
     $('#promptState').textContent = t(custom ? 'parent.promptCustom' : 'parent.promptDefault');
   }

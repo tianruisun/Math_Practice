@@ -300,12 +300,16 @@
 
   /* ---------- picking ---------- */
   function generate(year, diff, tag) {
-    const b = band(year), d = Math.max(3, Math.min(4, diff));
-    let pool = T.filter(t => t.bands.includes(b) && t.minD <= d && (!tag || t.tags.includes(tag)));
+    // 3 = Advanced, 4 = Challenge, 5 = AMO level only (hard end of competition papers)
+    const b = band(year), d = Math.max(3, Math.min(5, diff));
+    let pool = T.filter(t => t.bands.includes(b) && t.minD <= (d === 3 ? 3 : 5) && (!tag || t.tags.includes(tag)));
     if (!pool.length) return null;
-    // Challenge prefers the hardest templates; Advanced the gentler ones
-    const pref = pool.filter(t => t.minD === d);
-    if (pref.length && Math.random() < 0.7) pool = pref;
+    // Advanced keeps to the gentler templates; Challenge leans on the hardest ones, mostly AMO-level
+    const hard = pool.filter(t => t.minD >= 4), amo = pool.filter(t => t.minD === 5);
+    if (d === 5 && amo.length) pool = amo;
+    else if (d === 4 && amo.length && Math.random() < 0.6) pool = amo;
+    else if (d === 4 && hard.length && Math.random() < 0.85) pool = hard;
+    else if (d === 3) { const pref = pool.filter(t => t.minD === 3); if (pref.length && Math.random() < 0.7) pool = pref; }
     // avoid repeating a problem type used in the last few competition questions
     const fresh = pool.filter(t => !recent.includes(t));
     if (fresh.length) pool = fresh;
