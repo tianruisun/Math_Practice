@@ -20,8 +20,8 @@
   /* ---------- state ---------- */
   const YEARS = [4, 5, 6, 7, 8, 9, 10];
   const COUNTS = [5, 10, 15, 20];
-  const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10 };
-  const SUBJECTS = ['maths', 'ga'];
+  const defaults = { subject: 'maths', year: 6, topic: 'mixed', diff: 2, count: 10, selLen: 'full' };
+  const SUBJECTS = ['maths', 'ga', 'sel'];
   const S = {
     screen: 'home',
     settings: Object.assign({}, defaults, store.get(K.settings, {})),
@@ -89,7 +89,13 @@
     if (![1, 2, 3, 4].includes(st.diff)) st.diff = 2;
     if (st.topic !== 'mixed' && !Gen.topicsFor(st.subject, st.year).includes(st.topic)) st.topic = 'mixed';
     chips($('#subjectChips'), 'subject', SUBJECTS.map(s => [s, t('subject.' + s)]), st.subject, v => { st.subject = v; st.topic = 'mixed'; saveSettings(); renderHome(); });
-    $('#subjectNote').textContent = t(st.subject === 'ga' ? 'home.gaNote' : 'home.levelNote');
+    $('#subjectNote').textContent = t(st.subject === 'ga' ? 'home.gaNote' : st.subject === 'sel' ? 'home.selNote' : 'home.levelNote');
+    const isSel = st.subject === 'sel';
+    $('#practiceOptions').hidden = isSel;
+    $('#selOptions').hidden = !isSel;
+    if (!['full', 'short'].includes(st.selLen)) st.selLen = 'full';
+    chips($('#selLenChips'), 'selLen', ['full', 'short'].map(k => [k, t('sel.len.' + k)]), st.selLen, v => { st.selLen = v; saveSettings(); });
+    $('#startBtn').textContent = t(isSel ? 'sel.start' : 'home.start');
     chips($('#yearChips'), 'year', YEARS.map(y => [y, String(y)]), st.year, v => { st.year = v; saveSettings(); renderHome(); });
     $('#yearChips').setAttribute('aria-label', t('home.year'));
     chips($('#topicChips'), 'topic', topicOptions(st.subject, st.year), st.topic, v => { st.topic = v; saveSettings(); });
@@ -107,6 +113,8 @@
   function topicNames(subject, year) { return Gen.topicsFor(subject, year).map(k => [k, window.I18N.STRINGS.en['topic.' + k]]); }
 
   async function startQuiz(settings) {
+    if (settings.subject === 'sel') return startTest(settings);
+    S.loadingKey = 'loading.ai';
     const { year, topic, diff, count } = settings, subject = settings.subject || 'maths';
     S.lastQuizSettings = Object.assign({}, settings);
     let questions = null;
@@ -138,7 +146,7 @@
   }
 
   function renderLoading() {
-    $('#loadingText').textContent = t('loading.ai', { name: S.loadingName });
+    $('#loadingText').textContent = t(S.loadingKey || 'loading.ai', { name: S.loadingName });
   }
 
   /* ---------- QUIZ ---------- */
@@ -162,6 +170,8 @@
 
   function renderQuiz() {
     const Q = S.quiz; if (!Q) return go('home');
+    if (Q.exam) return renderExam();
+    $('#timer').hidden = true; $('#examNav').hidden = true;
     const q = Q.questions[Q.i];
     $('#qProgress').textContent = t('quiz.progress', { i: Q.i + 1, n: Q.questions.length });
     $('#qTopic').textContent = t('topic.' + q.topic);
@@ -245,6 +255,110 @@
     a.focus();
   }
 
+
+  /* ---------- SELECTIVE TEST (timed exam: 35 questions / 40 min, or 18 / 20) ---------- */
+  let timerId = null;
+  function stopTimer() { if (timerId) { clearInterval(timerId); timerId = null; } }
+  const mmss = ms => { const sec = Math.max(0, Math.round(ms / 1000)); return Math.floor(sec / 60) + ':' + String(sec % 60).padStart(2, '0'); };
+  function scrollToQuestion() { const q = $('#qText'); if (q && q.scrollIntoView) q.scrollIntoView({ block: 'start' }); window.scrollTo(0, 0); }
+
+  async function startTest(settings) {
+    const len = settings.selLen === 'short' ? 'short' : 'full', spec = len === 'short' ? Selective.SHORT : Selective.FULL;
+    S.lastQuizSettings = Object.assign({}, settings);
+    let questions = null;
+    const ai = aiConfig();
+    if (ai && navigator.onLine !== false) {
+      S.loadingName = AI.PROVIDERS[ai.provider].name; S.loadingKey = 'loading.sel';
+      go('loading');
+      try { questions = await AI.generateSelective(ai, len); }
+      catch (e) { console.warn('AI test failed:', e); toast(t('loading.fallback', { err: e.message || String(e) }), 7000); questions = null; }
+      if (S.screen !== 'loading') return;
+    } else if (ai) toast(t('offline'));
+    // keep the paper's shape: easy → medium → hard, topping up any tier the AI fell short on
+    const mix = Selective.MIX[spec.n], local = Selective.generateTest(len), out = [];
+    [1, 2, 3].forEach((tier, k) => {
+      const fromAi = (questions || []).filter(q => q.tier === tier).slice(0, mix[k]);
+      out.push(...fromAi, ...local.filter(q => q.tier === tier).slice(0, mix[k] - fromAi.length));
+    });
+    S.quiz = {
+      exam: true, questions: out, i: 0, answers: Array(out.length).fill(null), results: [], finished: false,
+      startedAt: Date.now(), limitMs: spec.minutes * 60000,
+      settings: Object.assign({}, settings, { subject: 'sel', topic: len === 'short' ? 'selshort' : 'selfull' })
+    };
+    go('quiz');
+    timerId = setInterval(tickTimer, 1000);
+    tickTimer();
+  }
+
+  function tickTimer() {
+    const Q = S.quiz; if (!Q || !Q.exam || Q.finished) return stopTimer();
+    const left = Q.limitMs - (Date.now() - Q.startedAt), tm = $('#timer');
+    tm.textContent = '⏱ ' + mmss(left);
+    tm.setAttribute('aria-label', t('sel.timer') + ' ' + mmss(left));
+    tm.classList.toggle('low', left < 5 * 60000);
+    if (left <= 0) finishTest(true);
+  }
+
+  function renderExam() {
+    const Q = S.quiz, q = Q.questions[Q.i], n = Q.questions.length, answered = Q.answers.filter(a => a !== null).length;
+    $('#qProgress').textContent = t('quiz.progress', { i: Q.i + 1, n });
+    $('#qTopic').textContent = t('topic.' + q.topic);
+    $('#qBar').style.width = (100 * answered / n) + '%';
+    $('#qText').textContent = q.q[lang()] || q.q.en;
+    $('#qTip').hidden = true; $('#inputArea').hidden = true; $('#choiceArea').hidden = false;
+    $('#feedback').textContent = ''; $('#feedback').className = 'feedback';
+    $('#checkBtn').hidden = true; $('#nextBtn').hidden = true; $('#parentAnswer').hidden = true;
+    $('#examNav').hidden = false; $('#timer').hidden = false;
+    const box = $('#choices'); box.innerHTML = '';
+    q.choices.forEach((c, i) => {
+      const b = el('button', 'choice'); b.type = 'button';
+      b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(Q.answers[Q.i] === i));
+      b.append(el('span', 'letter', 'ABCDE'[i]), el('span', '', c[lang()] || c.en));
+      b.addEventListener('click', () => { if (Q.finished) return; Q.answers[Q.i] = i; renderExam(); });
+      box.append(b);
+    });
+    $('#prevQ').disabled = Q.i === 0;
+    $('#nextQ').disabled = Q.i === n - 1;
+    $('#answeredCount').textContent = t('sel.answered', { a: answered, n });
+    const pal = $('#palette'); pal.innerHTML = '';
+    Q.questions.forEach((_, k) => {
+      const b = el('button', 'pal' + (Q.answers[k] !== null ? ' done' : '') + (k === Q.i ? ' current' : ''), String(k + 1));
+      b.type = 'button';
+      if (k === Q.i) b.setAttribute('aria-current', 'true');
+      b.addEventListener('click', () => { Q.i = k; renderExam(); scrollToQuestion(); });
+      pal.append(b);
+    });
+    tickTimer();
+  }
+
+  function finishTest(timeUp) {
+    const Q = S.quiz; if (!Q || !Q.exam || Q.finished) return;
+    Q.finished = true; stopTimer();
+    Q.timeUsed = Math.min(Date.now() - Q.startedAt, Q.limitMs);
+    Q.results = Q.questions.map((q, i) => ({ given: Q.answers[i] === null ? [] : [Q.answers[i]], ok: Q.answers[i] === q.correct, tries: 1 }));
+    saveSession();
+    go('results');
+    if (timeUp) toast(t('sel.timeUp'), 6000);
+  }
+
+  function renderExamSummary(Q) {
+    const rt = $('#resTime'), rc = $('#resCats');
+    if (!Q.exam) { rt.hidden = true; rc.hidden = true; return; }
+    const n = Q.questions.length, sec = lang() === 'zh' ? ' 秒' : ' s';
+    rt.hidden = false;
+    rt.textContent = t('res.time', { used: mmss(Q.timeUsed), limit: mmss(Q.limitMs), per: Math.round(Q.timeUsed / 1000 / n), target: Math.round(Q.limitMs / 1000 / n) + sec });
+    const by = {};
+    Q.questions.forEach((q, i) => { const b = by[q.topic] = by[q.topic] || [0, 0]; b[1]++; if (Q.results[i].ok) b[0]++; });
+    rc.innerHTML = ''; rc.hidden = false;
+    rc.append(el('h3', '', t('res.byCat')));
+    Object.keys(by).forEach(k => {
+      const p = Math.round(100 * by[k][0] / by[k][1]), row = el('div', 'tbar'), lbl = el('div', 'lbl');
+      lbl.append(el('span', '', t('topic.' + k)), el('span', '', `${by[k][0]}/${by[k][1]}`));
+      const track = el('div', 'track'), fill = el('div', 'fill ' + (p < 50 ? 'low' : p < 80 ? 'mid' : 'high'));
+      fill.style.width = p + '%'; track.append(fill); row.append(lbl, track); rc.append(row);
+    });
+  }
+
   /* ---------- history ---------- */
   function saveSession() {
     const Q = S.quiz;
@@ -259,7 +373,7 @@
     const h = store.get(K.history, []);
     h.push({
       date: Date.now(), subject: Q.settings.subject, year: Q.settings.year, topic: Q.settings.topic, diff: Q.settings.diff,
-      n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong
+      n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong, time: Q.timeUsed || null
     });
     store.set(K.history, h.slice(-100));
   }
@@ -270,6 +384,7 @@
     const n = Q.questions.length, c = Q.results.filter(r => r && r.ok).length, pct = c / n;
     $('#resScore').textContent = t('res.score', { c, n });
     $('#resMsg').textContent = t(pct >= 0.85 ? 'res.msg.great' : pct >= 0.6 ? 'res.msg.good' : 'res.msg.keep');
+    renderExamSummary(Q);
     $('#resLocked').hidden = S.parent;
     $('#unlockBtn').hidden = S.parent;
     const list = $('#resList'); list.innerHTML = '';
@@ -316,7 +431,7 @@
     const ul = el('ul', 'plain');
     const fmtDate = d => new Date(d).toLocaleDateString(lang() === 'zh' ? 'zh-CN' : 'en-AU', { day: 'numeric', month: 'short' });
     h.slice(-8).reverse().forEach(x => ul.append(el('li', '', t('prog.row', {
-      date: fmtDate(x.date), year: t('home.yearN', { n: x.year }), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
+      date: fmtDate(x.date), year: x.subject === 'sel' ? '⏱ ' + mmss(x.time || 0) : t('home.yearN', { n: x.year }), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
     }))));
     box.append(ul);
 
@@ -466,8 +581,8 @@
 
   /* ---------- wire up ---------- */
   document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
-    if (S.screen === 'quiz' && !confirm(t('quiz.quitConfirm'))) return;
-    if (S.screen === 'quiz') S.quiz = null;
+    if (S.screen === 'quiz' && !confirm(t(S.quiz && S.quiz.exam ? 'sel.quitConfirm' : 'quiz.quitConfirm'))) return;
+    if (S.screen === 'quiz') { stopTimer(); S.quiz = null; }
     go(b.dataset.go);
   }));
   $('#langBtn').addEventListener('click', () => {
@@ -481,7 +596,16 @@
   $('#startBtn').addEventListener('click', () => startQuiz(S.settings));
   $('#answerForm').addEventListener('submit', e => { e.preventDefault(); submitAnswer(); });
   $('#nextBtn').addEventListener('click', nextQuestion);
-  $('#quitBtn').addEventListener('click', () => { if (confirm(t('quiz.quitConfirm'))) { S.quiz = null; go('home'); } });
+  $('#quitBtn').addEventListener('click', () => {
+    if (confirm(t(S.quiz && S.quiz.exam ? 'sel.quitConfirm' : 'quiz.quitConfirm'))) { stopTimer(); S.quiz = null; go('home'); }
+  });
+  $('#prevQ').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.exam && Q.i > 0) { Q.i -= 1; renderExam(); scrollToQuestion(); } });
+  $('#nextQ').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.exam && Q.i < Q.questions.length - 1) { Q.i += 1; renderExam(); scrollToQuestion(); } });
+  $('#finishBtn').addEventListener('click', () => {
+    const Q = S.quiz; if (!Q || !Q.exam) return;
+    const left = Q.answers.filter(a => a === null).length;
+    if (confirm(left ? t('sel.finishConfirm', { n: left }) : t('sel.finishConfirm0'))) finishTest(false);
+  });
   document.querySelectorAll('.key').forEach(k => {
     k.addEventListener('mousedown', e => e.preventDefault()); // keep the keyboard open / caret in place
     k.addEventListener('click', () => insertKey(k.dataset.key));
@@ -511,7 +635,7 @@
     } finally { btn.disabled = false; }
   });
   window.addEventListener('beforeunload', e => {
-    if (S.screen === 'quiz' && S.quiz && S.quiz.i > 0) { e.preventDefault(); e.returnValue = ''; }
+    if (S.screen === 'quiz' && S.quiz && (S.quiz.i > 0 || (S.quiz.exam && !S.quiz.finished))) { e.preventDefault(); e.returnValue = ''; }
   });
 
   registerSW();

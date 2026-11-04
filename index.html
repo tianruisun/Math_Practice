@@ -44,10 +44,11 @@
 
       <fieldset>
         <legend data-i18n="home.subject">Subject</legend>
-        <div class="chips chips-2 subject" id="subjectChips"></div>
+        <div class="chips chips-3 subject" id="subjectChips"></div>
         <p class="muted small note" id="subjectNote"></p>
       </fieldset>
 
+      <div id="practiceOptions">
       <fieldset>
         <legend data-i18n="home.year">Year level</legend>
         <div class="chips chips-7" id="yearChips"></div>
@@ -67,6 +68,24 @@
         <legend data-i18n="home.count">Number of questions</legend>
         <div class="chips chips-4" id="countChips"></div>
       </fieldset>
+      </div>
+
+      <div id="selOptions" hidden>
+        <div class="card sel-card">
+          <h3 data-i18n="sel.heading">Mathematical Reasoning practice test</h3>
+          <ul class="rules">
+            <li data-i18n="sel.rule1"></li>
+            <li data-i18n="sel.rule2"></li>
+            <li data-i18n="sel.rule3"></li>
+            <li data-i18n="sel.rule4"></li>
+            <li data-i18n="sel.rule5"></li>
+          </ul>
+        </div>
+        <fieldset>
+          <legend data-i18n="sel.length">Test length</legend>
+          <div class="chips chips-1" id="selLenChips"></div>
+        </fieldset>
+      </div>
 
       <p class="source" id="sourceLine"></p>
       <button type="button" id="startBtn" class="btn primary" data-i18n="home.start">Start practice</button>
@@ -84,6 +103,7 @@
     <section id="screen-quiz" class="screen" hidden aria-labelledby="qText">
       <div class="quiz-head">
         <p id="qProgress" class="muted"></p>
+        <p id="timer" class="timer" role="timer" hidden></p>
         <p id="qTopic" class="badge"></p>
       </div>
       <div class="bar" aria-hidden="true"><div id="qBar"></div></div>
@@ -113,6 +133,16 @@
         <p id="parentAnswer" class="parent-box" hidden></p>
         <button type="submit" id="checkBtn" class="btn primary" data-i18n="quiz.check">Check answer</button>
         <button type="button" id="nextBtn" class="btn primary" hidden></button>
+        <div id="examNav" hidden>
+          <div class="row">
+            <button type="button" id="prevQ" class="btn secondary" data-i18n="sel.prev">Previous</button>
+            <button type="button" id="nextQ" class="btn primary" data-i18n="sel.next">Next</button>
+          </div>
+          <p class="muted small answered" id="answeredCount"></p>
+          <p class="label" id="paletteLabel" data-i18n="sel.palette">Go to question</p>
+          <div id="palette" class="palette" role="group" aria-labelledby="paletteLabel"></div>
+          <button type="button" id="finishBtn" class="btn primary finish" data-i18n="sel.finish">Finish test</button>
+        </div>
       </form>
       <button type="button" id="quitBtn" class="btn ghost" data-i18n="quiz.quit">Quit</button>
     </section>
@@ -123,7 +153,9 @@
       <div class="score-card">
         <p id="resScore" class="score"></p>
         <p id="resMsg"></p>
+        <p id="resTime" class="muted small" hidden></p>
       </div>
+      <div id="resCats" class="res-cats" hidden></div>
       <p id="resLocked" class="muted" data-i18n="res.locked"></p>
       <button type="button" id="unlockBtn" class="btn secondary" data-i18n="res.unlock">Parent: show answers</button>
       <ol id="resList" class="review"></ol>
@@ -190,6 +222,7 @@
   <script src="./js/gen-maths.js"></script>
   <script src="./js/gen-word.js"></script>
   <script src="./js/gen-ga.js"></script>
+  <script src="./js/gen-selective.js"></script>
   <script src="./js/ai.js"></script>
   <script src="./js/app.js"></script>
 </body>
