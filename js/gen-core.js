@@ -40,7 +40,8 @@
     return {
       type: 'input', topic: o.topic, q: { en: o.en, zh: o.zh }, value: round(o.value, 9),
       answer: o.answer !== undefined ? o.answer : (o.unit === '$' ? '$' : '') + num(o.value) + unitSuffix,
-      unit: o.unit || '', tol: o.tol, sol: { en: o.solEn || '', zh: o.solZh || o.solEn || '' }, source: 'local'
+      unit: o.unit || '', tol: o.tol, sol: { en: o.solEn || '', zh: o.solZh || o.solEn || '' }, source: 'local',
+      ...(o.fig ? { fig: o.fig } : {})
     };
   }
 
@@ -69,7 +70,8 @@
     const choices = shuffle([right, ...wrong]);
     return {
       type: 'mc', topic: o.topic, q: { en: o.en, zh: o.zh }, choices, correct: choices.indexOf(right),
-      sol: { en: o.solEn || '', zh: o.solZh || o.solEn || '' }, source: 'local'
+      sol: { en: o.solEn || '', zh: o.solZh || o.solEn || '' }, source: 'local',
+      ...(o.fig ? { fig: o.fig } : {})
     };
   }
 
@@ -80,53 +82,76 @@
     return out.filter(x => Number.isFinite(x) && x !== v).map(x => num(round(x, 4)));
   }
 
-  /* ---------- registry ---------- */
-  const SUBJECTS = { maths: {}, ga: {} };   // subject -> topic -> { minYear, fn, weight }
+  /* ---------- registry ----------
+     Years: 1–12, plus 13 = Year 12 Extension 1 (3U) and 14 = Year 12 Extension 2 (4U).
+     Each topic covers minYear..maxYear. */
+  const YEARS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
+  const PRIMARY = [1, 2, 3, 4, 5, 6], HIGH = [7, 8, 9, 10, 11, 12, 13, 14];
+  const SUBJECTS = { maths: {}, ga: {} };   // subject -> topic -> { minYear, maxYear, fn }
 
-  function register(subject, topic, minYear, fn, weight = 1) { SUBJECTS[subject][topic] = { minYear, fn, weight }; }
+  function register(subject, topic, minYear, fn, opts) {
+    const o = typeof opts === 'object' && opts ? opts : {};
+    SUBJECTS[subject][topic] = { minYear, maxYear: o.maxYear || 14, fn, olympiadOnly: !!o.olympiadOnly };
+  }
   function topicsFor(subject, y) {
     const s = SUBJECTS[subject] || {};
-    return Object.keys(s).filter(k => s[k].minYear <= y);
+    return Object.keys(s).filter(k => s[k].minYear <= y && y <= s[k].maxYear);
   }
   function subjectOf(topic) { return Object.keys(SUBJECTS).find(s => SUBJECTS[s][topic]) || 'maths'; }
 
+  /* Advanced (3) and Challenge (4) draw on the olympiad / tutoring-centre bank (gen-olympiad.js) */
+  const OLY_SHARE = { 3: 0.4, 4: 0.75 };
+  function olympiad() { return root.Olympiad || null; }
+
+  function finish(q, subject, year, diff, topic) { q.topic = q.topic || topic; q.subject = subject; q.year = year; q.diff = diff; return q; }
+
   function generate(subject, year, topic, diff) {
-    const list = topicsFor(subject, year);
-    const t = topic !== 'mixed' && list.includes(topic) ? topic : pick(list);
-    for (let i = 0; i < 20; i++) {
+    const list = topicsFor(subject, year).filter(k => !SUBJECTS[subject][k].olympiadOnly || topic === k);
+    const t = topic !== 'mixed' && topicsFor(subject, year).includes(topic) ? topic : pick(list);
+    const O = olympiad();
+    // a specific topic at Advanced/Challenge: sometimes use a competition problem on that topic
+    if (O && subject === 'maths' && diff >= 3 && t !== 'olymp' && Math.random() < OLY_SHARE[diff] * 0.8) {
+      const q = O.generate(year, diff, t);
+      if (q) return finish(q, subject, year, diff, t);
+    }
+    for (let i = 0; i < 25; i++) {
       const q = SUBJECTS[subject][t].fn(year, diff);
-      if (q) { q.topic = q.topic || t; q.subject = subject; q.year = year; q.diff = diff; return q; }
+      if (q) return finish(q, subject, year, diff, t);
     }
     throw new Error('generator failed for ' + t);
   }
 
-  /* n distinct questions. Mixed: spread topics evenly; in maths, about 1 in 3 is a word problem (应用题). */
+  /* n distinct questions. Mixed: spread topics evenly; in maths about 1 in 3 is a word problem (应用题)
+     where word problems exist for the year, and Advanced/Challenge mix in competition problems. */
   function generateSet(subject, year, topic, diff, n) {
     const out = [], seen = new Set();
-    const all = topicsFor(subject, year);
-    // Mixed: favour this year's content (topics introduced recently appear more often)
+    const all = topicsFor(subject, year).filter(k => !SUBJECTS[subject][k].olympiadOnly);
     const others = [];
     for (const k of all.filter(k => k !== 'word')) {
       const age = year - SUBJECTS[subject][k].minYear, w = subject === 'ga' ? 1 : age <= 2 ? 3 : age <= 4 ? 2 : 1;
       for (let i = 0; i < w; i++) others.push(k);
     }
     let order = shuffle(others), oi = 0;
+    const canOly = subject === 'maths' && diff >= 3 && topicsFor('maths', year).includes('olymp');
     for (let tries = 0; out.length < n && tries < n * 60; tries++) {
       let tp = topic;
       if (topic === 'mixed') {
-        if (subject === 'maths' && all.includes('word') && out.length % 3 === 1) tp = 'word';
+        if (canOly && Math.random() < OLY_SHARE[diff]) tp = 'olymp';
+        else if (subject === 'maths' && all.includes('word') && out.length % 3 === 1) tp = 'word';
         else { tp = order[oi % order.length]; oi++; if (oi % order.length === 0) order = shuffle(order); }
       }
       const q = generate(subject, year, tp, diff);
-      if (seen.has(q.q.en)) continue;
-      seen.add(q.q.en); out.push(q);
+      // chart questions can share wording, so the picture and options count too
+      const key = q.q.en + (q.fig ? JSON.stringify(q.fig) : '') + (q.choices ? q.choices.map(c => c.en).join('|') : '');
+      if (seen.has(key)) continue;
+      seen.add(key); out.push(q);
     }
     return out;
   }
 
   const api = {
     R, pick, gcd, lcm, round, MINUS, fmt, num, paren, sg, coef, fracStr, shuffle, both,
-    mk, mc, nearNums, register, topicsFor, subjectOf, generate, generateSet, SUBJECTS
+    mk, mc, nearNums, register, topicsFor, subjectOf, generate, generateSet, SUBJECTS, YEARS, PRIMARY, HIGH
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.Gen = api;

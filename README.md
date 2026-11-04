@@ -1,4 +1,4 @@
-# Maths & Reasoning · 数学与思维 (Years 4–10)
+# Maths & Reasoning · 数学与思维 (Years 1–12, Extension 1 & 2)
 
 A mobile-first, installable maths and reasoning practice web app (PWA) for students in Years 4 to 10.
 Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so it runs on GitHub Pages as-is.
@@ -13,7 +13,11 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 - **Two views:** answer **one question at a time**, or switch to **Pages** to see five questions per screen (works for practice sets and the timed test).
 - **Print on A4:** a Print button (on Home, in a quiz and on Results) lays the questions out as an A4 worksheet with name/date/score fields, figures and A–E options or answer lines. Optionally adds an **answer key with worked solutions on a separate page** (needs the parent PIN). Use the browser's print window to print or “Save as PDF”.
 - **Modern look** with automatic dark mode.
-- **Four difficulty levels:** Core 基础 · Standard 提高 · Advanced 拓展 · Challenge 挑战 (competition style).
+- **Years 1–12, Extension 1 (3U) and Extension 2 (4U)**, chosen with two combo boxes: **School** (Primary / High school) and **Year**. Years 1–3 have counting, adding, times tables, shapes, telling the time (clock faces), money, simple fractions and picture graphs; Years 11–12 have functions, exponentials and logs, trigonometry, calculus, series and probability; 3U adds combinatorics, polynomials, vectors and inverse trig; 4U adds complex numbers, integration and mechanics.
+- **Wide difficulty spread:** Core and Standard follow the school level (China/Singapore standards); **Advanced** is tutoring-centre extension level and **Challenge** is olympiad level. Advanced/Challenge sets draw on a bank of competition problems for every school band (`js/gen-olympiad.js`) whose answers are computed by brute force, so they are always correct. AI questions are asked for the same levels.
+- **More charts:** Graphs & data and Geometry diagrams topics (Years 4–10), clock and picture-graph questions (Years 1–3), coordinate-grid and triangle diagrams (senior), and pie charts, coordinate grids and travel graphs in the Selective test.
+- **Clear progress** button on the Progress screen (protected by the parent PIN).
+- **Four difficulty levels:** Core 基础 · Standard 提高 · Advanced 拓展（培优）· Challenge 挑战（奥赛）.
 - **Screens:** Home (subject, year, topic or Mixed, difficulty, number of questions) → Quiz → Results, plus Progress and Parent settings.
 - **Bilingual:** English and Simplified Chinese. All interface text is in `js/i18n.js`. The 中文/EN button switches instantly, without reloading or losing the current question, the typed answer or the selected option. The choice is remembered.
 - **Answer checking** (`js/checker.js`): ignores spaces; accepts equivalent fractions (6/8 = 3/4), mixed numbers (1 1/2), `3分之2`, full-width (Chinese keyboard) digits, `x = 5`; allows a small tolerance for decimals (2/3 ≈ 0.67); accepts units if present (`24 cm²`, `24平方厘米`, `$12.50`, `72°`) but rejects the wrong unit.
@@ -26,7 +30,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 ## Publish on GitHub Pages
 1. Push to GitHub. In the repo: **Settings → Pages → Build and deployment → Deploy from a branch**, pick your branch and `/ (root)`.
 2. Open `https://<user>.github.io/<repo>/`. On a phone use **Add to Home Screen** / **Install app**.
-3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v7` → `maths-v8`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
+3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v8` → `maths-v9`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
 
 ## AI keys
 - Claude: create a key at console.anthropic.com. Default model `claude-opus-5-5`; `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper/faster options in settings.
@@ -43,6 +47,10 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 | `js/gen-core.js` | Shared helpers, topic registry, question sets |
 | `js/gen-maths.js` | Maths topics (China/Singapore levels) |
 | `js/gen-word.js` | 应用题 word problems |
+| `js/gen-junior.js` | Years 1–3 |
+| `js/gen-senior.js` | Years 11–12, Extension 1 and 2 |
+| `js/gen-charts.js` | Graphs & data, geometry diagrams |
+| `js/gen-olympiad.js` | Competition / tutoring-centre problems (Advanced & Challenge) |
 | `js/gen-ga.js` | General ability (multiple choice) |
 | `js/figures.js` | Charts and diagrams (SVG/HTML) for questions |
 | `js/gen-selective.js` | Selective test (35 questions / 40 minutes, 5 options) |

@@ -161,7 +161,52 @@
     return `<table class="ftable${f.grid ? ' gridtable' : ''}">${head}<tbody>${body}</tbody></table>`;
   }
 
-  const R = { bar, line: lineGraph, dial, jug, clock, spinner, shape, grid, picto, table };
+
+  /* ---------- pie chart ---------- */
+  function pie(f, lang) {
+    const W = 340, H = 220, c = 105, R = 92, tot = f.values.reduce((a, b) => a + b, 0);
+    let a0 = -Math.PI / 2, b = '', leg = '';
+    f.values.forEach((v, i) => {
+      const a1 = a0 + v / tot * 2 * Math.PI, large = a1 - a0 > Math.PI ? 1 : 0, am = (a0 + a1) / 2;
+      const cls = f.shade != null ? (i < f.shade ? 'p0' : 'pw') : 'p' + (i % 6);
+      b += `<path d="M${c} ${c + 5} L${r1(c + Math.cos(a0) * R)} ${r1(c + 5 + Math.sin(a0) * R)} A${R} ${R} 0 ${large} 1 ${r1(c + Math.cos(a1) * R)} ${r1(c + 5 + Math.sin(a1) * R)} Z" class="fpie ${cls}"/>`;
+      if (f.showValues) b += text(c + Math.cos(am) * R * 0.62, c + 5 + Math.sin(am) * R * 0.62 + 4, f.showValues[i], { cls: 'ft fb' });
+      if (f.labels && f.labels[i]) leg += `<rect x="215" y="${22 + i * 28}" width="16" height="16" class="fpie p${i % 6}"/>` + text(238, 35 + i * 28, L(f.labels[i], lang), { anchor: 'start', cls: 'ft' });
+      a0 = a1;
+    });
+    return svg(f.labels && f.labels.length ? W : 2 * c + 10, H, b + leg, 'pie chart');
+  }
+
+  /* ---------- coordinate plane with points / line segments ---------- */
+  function coord(f, lang) {
+    const s = 24, nx = f.xmax - f.xmin, ny = f.ymax - f.ymin, W = nx * s + 40, H = ny * s + 40;
+    const X = x => 20 + (x - f.xmin) * s, Y = y => 20 + (f.ymax - y) * s;
+    let b = '';
+    for (let x = f.xmin; x <= f.xmax; x++) b += line(X(x), Y(f.ymin), X(x), Y(f.ymax), x === 0 ? 'fl fax' : 'fl fg');
+    for (let y = f.ymin; y <= f.ymax; y++) b += line(X(f.xmin), Y(y), X(f.xmax), Y(y), y === 0 ? 'fl fax' : 'fl fg');
+    for (let x = f.xmin; x <= f.xmax; x++) if (x && x % (f.tick || 2) === 0) b += text(X(x), Y(0) + 14, x, { cls: 'ft fs' });
+    for (let y = f.ymin; y <= f.ymax; y++) if (y && y % (f.tick || 2) === 0) b += text(X(0) - 5, Y(y) + 4, y, { anchor: 'end', cls: 'ft fs' });
+    b += text(X(f.xmax) - 4, Y(0) - 6, 'x', { cls: 'ft fb' }) + text(X(0) + 8, Y(f.ymax) + 12, 'y', { cls: 'ft fb' });
+    (f.segments || []).forEach(([x1, y1, x2, y2]) => { b += `<line x1="${X(x1)}" y1="${Y(y1)}" x2="${X(x2)}" y2="${Y(y2)}" class="fline"/>`; });
+    (f.points || []).forEach(([x, y, lab]) => { b += `<circle cx="${X(x)}" cy="${Y(y)}" r="4" class="fdot"/>`; if (lab) b += text(X(x) + 8, Y(y) - 7, L(lab, lang), { anchor: 'start', cls: 'ft fb' }); });
+    return svg(W, H, b, 'coordinate grid');
+  }
+
+  /* ---------- triangle with labelled angles / sides ---------- */
+  function triangle(f, lang) {
+    const P = f.right ? [[40, 190], [300, 190], [40, 40]] : [[30, 190], [310, 190], [f.apex || 120, 40]];
+    const names = ['A', 'B', 'C'];
+    let b = `<polygon points="${P.map(p => p.join(',')).join(' ')}" class="fshape shaded"/>`;
+    if (f.right) b += `<path d="M40 172 L58 172 L58 190" class="fl fax" fill="none"/>`;
+    const cx = (P[0][0] + P[1][0] + P[2][0]) / 3, cy = (P[0][1] + P[1][1] + P[2][1]) / 3;
+    (f.angles || []).forEach((a, i) => { if (a == null) return; const [x, y] = P[i], dx = cx - x, dy = cy - y, d = Math.hypot(dx, dy); b += text(x + dx / d * 34, y + dy / d * 34 + 5, L(a, lang), { cls: 'ft fb' }); });
+    (f.sides || []).forEach((sd, i) => { if (sd == null) return; const [x1, y1] = P[i], [x2, y2] = P[(i + 1) % 3], mx = (x1 + x2) / 2, my = (y1 + y2) / 2, dx = mx - cx, dy = my - cy, d = Math.hypot(dx, dy); b += text(mx + dx / d * 16, my + dy / d * 16 + 5, L(sd, lang), { cls: 'ft fb' }); });
+    if (f.names) P.forEach(([x, y], i) => { const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy); b += text(x + dx / d * 14, y + dy / d * 14 + 5, names[i], { cls: 'ft fb' }); });
+    if (f.note) b += text(170, 222, L(f.note, lang), { cls: 'ft fs' });
+    return svg(340, f.note ? 230 : 215, b, 'triangle');
+  }
+
+  const R = { bar, line: lineGraph, dial, jug, clock, spinner, shape, grid, picto, table, pie, coord, triangle };
   function render(fig, lang) {
     if (!fig || !R[fig.type]) return '';
     try { return `<figure class="fig fig-${fig.type}">${R[fig.type](fig, lang || 'en')}</figure>`; }

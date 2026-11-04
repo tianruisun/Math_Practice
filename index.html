@@ -48,26 +48,30 @@
         <p class="muted small note" id="subjectNote"></p>
       </fieldset>
 
-      <div id="practiceOptions">
-      <fieldset>
-        <legend data-i18n="home.year">Year level</legend>
-        <div class="chips chips-7" id="yearChips"></div>
-      </fieldset>
-
-      <fieldset>
-        <legend data-i18n="home.topic">Topic</legend>
-        <div class="chips chips-2" id="topicChips"></div>
-      </fieldset>
-
-      <fieldset>
-        <legend data-i18n="home.diff">Difficulty</legend>
-        <div class="chips chips-4 diff" id="diffChips"></div>
-      </fieldset>
-
-      <fieldset>
-        <legend data-i18n="home.count">Number of questions</legend>
-        <div class="chips chips-4" id="countChips"></div>
-      </fieldset>
+      <div id="practiceOptions" class="card form-card">
+        <div class="field-row">
+          <div class="field">
+            <label class="label" for="schoolSel" data-i18n="home.school">School</label>
+            <select id="schoolSel" class="combo"></select>
+          </div>
+          <div class="field">
+            <label class="label" for="yearSel" data-i18n="home.year">Year level</label>
+            <select id="yearSel" class="combo"></select>
+          </div>
+        </div>
+        <div class="field">
+          <label class="label" for="topicSel" data-i18n="home.topic">Topic</label>
+          <select id="topicSel" class="combo"></select>
+        </div>
+        <div class="field">
+          <label class="label" for="diffSel" data-i18n="home.diff">Difficulty</label>
+          <select id="diffSel" class="combo"></select>
+          <p class="muted small note" id="diffNote" data-i18n="home.diffNote"></p>
+        </div>
+        <div class="field">
+          <label class="label" for="countSel" data-i18n="home.count">Number of questions</label>
+          <select id="countSel" class="combo"></select>
+        </div>
       </div>
 
       <div id="selOptions" hidden>
@@ -81,10 +85,10 @@
             <li data-i18n="sel.rule5"></li>
           </ul>
         </div>
-        <fieldset>
-          <legend data-i18n="sel.length">Test length</legend>
-          <div class="chips chips-1" id="selLenChips"></div>
-        </fieldset>
+        <div class="field">
+          <label class="label" for="selLenSel" data-i18n="sel.length">Test length</label>
+          <select id="selLenSel" class="combo"></select>
+        </div>
       </div>
 
       <p class="source" id="sourceLine"></p>
@@ -230,6 +234,10 @@
   <script src="./js/gen-core.js"></script>
   <script src="./js/gen-maths.js"></script>
   <script src="./js/gen-word.js"></script>
+  <script src="./js/gen-junior.js"></script>
+  <script src="./js/gen-senior.js"></script>
+  <script src="./js/gen-charts.js"></script>
+  <script src="./js/gen-olympiad.js"></script>
   <script src="./js/gen-ga.js"></script>
   <script src="./js/gen-selective.js"></script>
   <script src="./js/ai.js"></script>
