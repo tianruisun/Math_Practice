@@ -106,7 +106,14 @@
   }
 
   /* subject tiles: big cards with an icon (radio buttons underneath, so they work with keyboards and screen readers) */
-  const SUBJECT_ICON = { maths: '🧮', ga: '🧩', sel: '📝', comp: '🏆' };
+  /* drawn icons (not emoji) so every tile looks the same size on every device */
+  const SVG = d => `<svg viewBox="0 0 32 32" aria-hidden="true">${d}</svg>`;
+  const SUBJECT_ICON = {
+    maths: SVG('<rect x="3" y="3" width="26" height="26" rx="7" fill="#7c4dff"/><path d="M9.5 11h6M12.5 8v6M18 11h5M9.5 21.5l5-5M14.5 21.5l-5-5M18 19h5M18 23h5" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>'),
+    ga: SVG('<path d="M16 3.5a9 9 0 0 0-5.2 16.3c.9.7 1.4 1.6 1.4 2.7V24h7.6v-1.5c0-1.1.5-2 1.4-2.7A9 9 0 0 0 16 3.5z" fill="#38bdf8"/><path d="M12.6 26.5h6.8M13.6 29h4.8" stroke="#0369a1" stroke-width="2.2" stroke-linecap="round"/><path d="M12.5 13.5l2.5 2.5 4.5-5" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>'),
+    sel: SVG('<rect x="6" y="5" width="20" height="24" rx="4" fill="#f59e0b"/><rect x="11" y="2.5" width="10" height="5.5" rx="2" fill="#b45309"/><path d="M10.5 14h11M10.5 19h11M10.5 24h6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/>'),
+    comp: SVG('<path d="M10 4h12v8a6 6 0 0 1-12 0z" fill="#f43f5e"/><path d="M10 6.5H5.5a4.5 4.5 0 0 0 4.8 5.5M22 6.5h4.5a4.5 4.5 0 0 1-4.8 5.5" stroke="#f43f5e" stroke-width="2.2" fill="none"/><path d="M16 18v5" stroke="#be123c" stroke-width="2.6"/><rect x="10" y="23.5" width="12" height="5" rx="1.8" fill="#be123c"/><path d="M16 7.5l1.1 2.2 2.4.3-1.8 1.7.5 2.4-2.2-1.2-2.2 1.2.5-2.4-1.8-1.7 2.4-.3z" fill="#fde68a"/>')
+  };
   function tiles(container, options, value, onChange) {
     container.innerHTML = '';
     options.forEach(([v, label, icon, sub], k) => {
@@ -115,7 +122,8 @@
       inp.checked = String(v) === String(value);
       inp.addEventListener('change', () => onChange(v));
       const box = el('span', 'tile-box');
-      box.append(el('span', 'tile-icon', icon), el('span', 'tile-label', label), el('span', 'tile-sub', sub));
+      const ic = el('span', 'tile-icon'); ic.innerHTML = icon;
+      box.append(ic, el('span', 'tile-label', label), el('span', 'tile-sub', sub));
       lab.append(inp, box); container.append(lab);
     });
   }

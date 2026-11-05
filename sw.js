@@ -1,5 +1,5 @@
 /* Bump CACHE_VERSION on every release so phones pick up the new files. */
-const CACHE_VERSION = 'maths-v12';
+const CACHE_VERSION = 'maths-v13';
 const ASSETS = [
   './',
   './index.html',
