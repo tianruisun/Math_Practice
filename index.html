@@ -24,7 +24,7 @@
   <header class="top">
     <h1 class="sr-only" data-i18n="app.title">Maths &amp; Reasoning</h1>
     <button type="button" id="profileBtn" class="hello" data-i18n-aria="profile.title">
-      <span class="avatar" id="profileAvatar" aria-hidden="true">S</span>
+      <span class="avatar-wrap"><span class="avatar" id="profileAvatar" aria-hidden="true">S</span><span class="avatar-badge" id="avatarBadge" hidden></span></span>
       <span class="hello-text">
         <span class="hello-name" id="helloText"></span>
         <span class="hello-sub" data-i18n="app.title">Maths &amp; Reasoning</span>
@@ -178,9 +178,14 @@
     <section id="screen-results" class="screen" hidden aria-labelledby="resH">
       <h2 id="resH" data-i18n="res.heading">Results</h2>
       <div class="score-card">
+        <div id="resStars"></div>
         <p id="resScore" class="score"></p>
         <p id="resMsg"></p>
         <p id="resTime" class="muted small" hidden></p>
+        <div id="resBadge" class="res-badge" hidden>
+          <span class="res-medal" aria-hidden="true">🏅</span>
+          <span><b data-i18n="badge.goodJob">Good job!</b><br><span id="resBadgeText"></span></span>
+        </div>
       </div>
       <div id="resCats" class="res-cats" hidden></div>
       <p id="resLocked" class="muted small" data-i18n="res.locked"></p>

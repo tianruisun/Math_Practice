@@ -15,7 +15,7 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
   };
-  const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai', profiles: 'mp.profiles', methods: 'mp.methods' };
+  const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai', profiles: 'mp.profiles', methods: 'mp.methods', badges: 'mp.badges' };
 
   /* ---------- student profiles: up to 3 per browser, each with its own progress and settings ---------- */
   const MAX_PROFILES = 3;
@@ -36,10 +36,11 @@
       name(pr) { return pr.name || t('profile.default', { n: P.list.indexOf(pr) + 1 }); },
       histKey() { return K.history + '.' + P.active; },
       setKey() { return K.settings + '.' + P.active; },
+      badgeKey() { return K.badges + '.' + P.active; },
       select(id) { P.active = id; store.set(K.profiles, P); },
       add(name) { if (P.list.length >= MAX_PROFILES) return null; let n = 1; while (P.list.some(x => x.id === 'p' + n)) n++; const pr = { id: 'p' + n, name }; P.list.push(pr); P.active = pr.id; store.set(K.profiles, P); return pr; },
       rename(id, name) { const pr = P.list.find(x => x.id === id); if (pr) { pr.name = name; store.set(K.profiles, P); } },
-      remove(id) { if (P.list.length <= 1) return false; P.list = P.list.filter(x => x.id !== id); store.del(K.history + '.' + id); store.del(K.settings + '.' + id); if (P.active === id) P.active = P.list[0].id; store.set(K.profiles, P); return true; }
+      remove(id) { if (P.list.length <= 1) return false; P.list = P.list.filter(x => x.id !== id); store.del(K.history + '.' + id); store.del(K.settings + '.' + id); store.del(K.badges + '.' + id); if (P.active === id) P.active = P.list[0].id; store.set(K.profiles, P); return true; }
     };
   })();
   const histKey = () => Profiles.histKey();
@@ -85,6 +86,8 @@
     $('#profileName').textContent = who;
     $('#helloText').textContent = t('home.hello', { name: who });
     $('#profileAvatar').textContent = (who.trim()[0] || 'S').toUpperCase();
+    const nb = badgeCount(), ab = $('#avatarBadge');
+    ab.hidden = !nb; ab.textContent = '🏅' + nb;
     document.body.classList.toggle('no-nav', S.screen === 'quiz' || S.screen === 'loading');
     ({ home: renderHome, loading: renderLoading, quiz: renderQuiz, results: renderResults, progress: renderProgress, parent: renderParent })[S.screen]();
   }
@@ -667,9 +670,31 @@
     });
   }
 
+  /* ---------- stars and badges ----------
+     100% → 3 stars + a "Good job" badge on the profile; 80–99% → 2; 60–79% → 1; under 60% → none */
+  const starsFor = (c, n) => { const p = n ? c / n : 0; return p >= 1 ? 3 : p >= 0.8 ? 2 : p >= 0.6 ? 1 : 0; };
+  const badgeCount = () => (store.get(Profiles.badgeKey(), []) || []).length;
+  function starRow(k, big) {
+    const row = el('div', 'stars' + (big ? ' big' : ''));
+    row.setAttribute('role', 'img'); row.setAttribute('aria-label', t('stars.label', { k }));
+    for (let i = 0; i < 3; i++) {
+      const sp = el('span', 'star s' + i + (i < k ? ' on' : ''));
+      sp.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.6l2.9 6 6.6.8-4.9 4.6 1.3 6.5L12 17.3l-5.9 3.2 1.3-6.5-4.9-4.6 6.6-.8z"/></svg>';
+      row.append(sp);
+    }
+    return row;
+  }
+
   /* ---------- history ---------- */
   function saveSession() {
     const Q = S.quiz;
+    Q.stars = starsFor(Q.results.filter(r => r && r.ok).length, Q.questions.length);
+    if (Q.stars === 3 && !Q.badgeGiven) {
+      const b = store.get(Profiles.badgeKey(), []) || [];
+      b.push({ date: Date.now(), subject: Q.settings.subject, topic: Q.settings.topic, n: Q.questions.length });
+      store.set(Profiles.badgeKey(), b.slice(-500));
+      Q.badgeGiven = true;
+    }
     const byTopic = {};
     Q.questions.forEach((q, i) => {
       const b = byTopic[q.topic] = byTopic[q.topic] || [0, 0];
@@ -682,7 +707,7 @@
     const h = store.get(histKey(), []);
     h.push({
       date: Date.now(), subject: Q.settings.subject, year: Q.settings.year, topic: Q.settings.topic, diff: Q.settings.diff,
-      n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong, time: Q.timeUsed || null,
+      n: Q.questions.length, correct: Q.results.filter(r => r && r.ok).length, byTopic, wrong, time: Q.timeUsed || null, stars: Q.stars,
       ...(Q.maxMarks ? { marks: Q.marks, maxMarks: Q.maxMarks } : {})
     });
     store.set(histKey(), h.slice(-100));
@@ -693,7 +718,12 @@
     const Q = S.quiz; if (!Q) return go('home');
     const n = Q.questions.length, c = Q.results.filter(r => r && r.ok).length, pct = c / n;
     $('#resScore').textContent = t('res.score', { c, n });
-    $('#resMsg').textContent = (Q.maxMarks ? t('comp.marksScore', { m: Q.marks, total: Q.maxMarks }) + ' ' : '') + t(pct >= 0.85 ? 'res.msg.great' : pct >= 0.6 ? 'res.msg.good' : 'res.msg.keep');
+    const k = starsFor(c, n), sb = $('#resStars');
+    sb.innerHTML = ''; sb.append(starRow(k, true));
+    $('#resMsg').textContent = (Q.maxMarks ? t('comp.marksScore', { m: Q.marks, total: Q.maxMarks }) + ' ' : '') + t('stars.msg' + k);
+    const badge = $('#resBadge');
+    badge.hidden = k !== 3;
+    if (k === 3) $('#resBadgeText').textContent = t('badge.added', { name: Profiles.name(Profiles.active), n: badgeCount() });
     renderExamSummary(Q);
     $('#resLocked').hidden = S.parent;
     $('#unlockBtn').hidden = S.parent;
@@ -802,6 +832,12 @@
       const d = el('div', 'stat'); d.append(el('b', '', String(v)), el('span', '', t(k))); stats.append(d);
     });
     box.append(stats);
+    const nb = badgeCount(), shelf = el('div', 'badge-shelf');
+    const medal = el('div', 'medal' + (nb ? '' : ' empty'), '🏅');
+    const txt = el('div', 'shelf-text');
+    txt.append(el('b', '', t('badge.title')), el('span', '', nb ? t('badge.count', { n: nb }) : t('badge.none')));
+    shelf.append(medal, txt);
+    box.append(shelf);
 
     const by = {};
     h.forEach(x => { for (const k in x.byTopic) { const b = by[k] = by[k] || [0, 0]; b[0] += x.byTopic[k][0]; b[1] += x.byTopic[k][1]; } });
@@ -819,7 +855,7 @@
     const fmtDate = d => new Date(d).toLocaleDateString(lang() === 'zh' ? 'zh-CN' : 'en-AU', { day: 'numeric', month: 'short' });
     h.slice(-8).reverse().forEach(x => ul.append(el('li', '', t('prog.row', {
       date: fmtDate(x.date), year: isTimed(x.subject) ? '⏱ ' + mmss(x.time || 0) : yearLabel(x.year), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
-    }) + (x.maxMarks ? ' · ' + t('comp.marksShort', { m: x.marks, total: x.maxMarks }) : ''))));
+    }) + (x.maxMarks ? ' · ' + t('comp.marksShort', { m: x.marks, total: x.maxMarks }) : '') + ' ' + '★'.repeat(x.stars !== undefined ? x.stars : starsFor(x.correct, x.n)) + '☆'.repeat(3 - (x.stars !== undefined ? x.stars : starsFor(x.correct, x.n))))));
     box.append(ul);
 
     box.append(el('h3', '', t('prog.review')));
@@ -843,7 +879,7 @@
     const btn = el('button', 'btn secondary danger', '🗑 ' + t('prog.clear')); btn.type = 'button'; btn.id = 'clearProgress';
     btn.addEventListener('click', async () => {
       if (!S.parent && !(await unlockParent())) return;
-      if (confirm(t('prog.resetConfirm'))) { store.del(histKey()); toast(t('prog.clear') + ' ✓'); renderProgress(); }
+      if (confirm(t('prog.resetConfirm'))) { store.del(histKey()); store.del(Profiles.badgeKey()); toast(t('prog.clear') + ' ✓'); renderProgress(); }
     });
     wrap.append(btn);
     if (!S.parent) wrap.append(el('p', 'muted small center', t('prog.clearNote')));
