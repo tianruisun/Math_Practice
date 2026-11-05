@@ -103,7 +103,19 @@
   const OLY_SHARE = { 3: 0.4, 4: 0.75 };
   function olympiad() { return root.Olympiad || null; }
 
-  function finish(q, subject, year, diff, topic) { q.topic = q.topic || topic; q.subject = subject; q.year = year; q.diff = diff; return q; }
+  /* every question remembers where it came from (ref) so the review can make similar ones */
+  function finish(q, subject, year, diff, topic) {
+    q.topic = q.topic || topic; q.subject = subject; q.year = year; q.diff = diff;
+    q.ref = Object.assign({ subject, year, diff }, q.ref, q.ref && q.ref.oly !== undefined ? {} : { gen: topic });
+    return q;
+  }
+  /* one question from exactly this generator (no competition-problem mixing) */
+  function generateExact(subject, year, topic, diff) {
+    const g = SUBJECTS[subject] && SUBJECTS[subject][topic];
+    if (!g) return null;
+    for (let i = 0; i < 25; i++) { const q = g.fn(year, diff); if (q) return finish(q, subject, year, diff, topic); }
+    return null;
+  }
 
   function generate(subject, year, topic, diff) {
     const list = topicsFor(subject, year).filter(k => !SUBJECTS[subject][k].olympiadOnly || topic === k);
@@ -151,7 +163,7 @@
 
   const api = {
     R, pick, gcd, lcm, round, MINUS, fmt, num, paren, sg, coef, fracStr, shuffle, both,
-    mk, mc, nearNums, register, topicsFor, subjectOf, generate, generateSet, SUBJECTS, YEARS, PRIMARY, HIGH
+    mk, mc, nearNums, register, topicsFor, subjectOf, generate, generateExact, generateSet, SUBJECTS, YEARS, PRIMARY, HIGH
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.Gen = api;

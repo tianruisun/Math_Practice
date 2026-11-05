@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Maths &amp; Reasoning</title>
   <meta name="description" content="Maths and reasoning practice for Years 4 to 10 in English and Simplified Chinese.">
-  <meta name="theme-color" content="#312e81">
+  <meta name="theme-color" content="#f6f3fd">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -14,41 +14,55 @@
   <link rel="icon" href="./icons/icon.svg" type="image/svg+xml">
   <link rel="icon" href="./icons/icon-192.png" sizes="192x192" type="image/png">
   <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap">
   <link rel="stylesheet" href="./css/style.css">
 </head>
 <body>
 
   <header class="top">
-    <div class="brand">
-      <img src="./icons/icon.svg" alt="" width="36" height="36">
-      <div>
-        <h1 data-i18n="app.title">Maths &amp; Reasoning</h1>
-        <p class="tagline" data-i18n="app.tagline">Years 4 to 10</p>
-      </div>
-    </div>
+    <h1 class="sr-only" data-i18n="app.title">Maths &amp; Reasoning</h1>
+    <button type="button" id="profileBtn" class="hello" data-i18n-aria="profile.title">
+      <span class="avatar" id="profileAvatar" aria-hidden="true">S</span>
+      <span class="hello-text">
+        <span class="hello-name" id="helloText"></span>
+        <span class="hello-sub" data-i18n="app.title">Maths &amp; Reasoning</span>
+      </span>
+      <span id="profileName" hidden></span>
+    </button>
     <div class="top-actions">
-      <button type="button" id="profileBtn" class="pill profile-pill"><span aria-hidden="true">👤</span> <span id="profileName"></span></button>
-      <button type="button" id="langBtn" class="pill" data-i18n="lang.switch" data-i18n-aria="lang.label">中文</button>
-      <button type="button" id="parentBtn" class="pill" aria-pressed="false"><span id="parentIcon" aria-hidden="true">🔒</span> <span id="parentLabel" data-i18n="nav.parent">Parent</span></button>
+      <button type="button" id="langBtn" class="round-btn" data-i18n="lang.switch" data-i18n-aria="lang.label">中文</button>
+      <button type="button" id="parentBtn" class="round-btn" aria-pressed="false"><span id="parentIcon" aria-hidden="true">🔒</span><span id="parentLabel" class="sr-only" data-i18n="nav.parent">Parent</span></button>
     </div>
   </header>
-
-  <nav class="tabs" aria-label="Main">
-    <button type="button" class="tab" data-go="home" data-i18n="nav.home">Home</button>
-    <button type="button" class="tab" data-go="progress" data-i18n="nav.progress">Progress</button>
-  </nav>
 
   <main id="main" tabindex="-1">
     <!-- HOME -->
     <section id="screen-home" class="screen" aria-labelledby="homeH">
-      <h2 id="homeH" data-i18n="home.heading">Set up your practice</h2>
+      <div class="hero">
+        <div class="hero-text">
+          <h2 id="homeH" data-i18n="home.heroTitle">Ready to practise?</h2>
+          <p class="hero-sub" id="heroSummary"></p>
+          <button type="button" id="heroStart" class="hero-btn" data-i18n="home.heroGo">Get started</button>
+        </div>
+        <svg class="hero-art" viewBox="0 0 140 110" aria-hidden="true">
+          <rect x="18" y="86" width="112" height="12" rx="3" fill="#fde68a"/><rect x="18" y="86" width="112" height="4" rx="2" fill="#f59e0b"/>
+          <rect x="30" y="22" width="20" height="64" rx="3" fill="#a78bfa"/><rect x="30" y="30" width="20" height="4" fill="#7c3aed"/>
+          <rect x="52" y="14" width="22" height="72" rx="3" fill="#fbbf24"/><rect x="52" y="22" width="22" height="4" fill="#d97706"/>
+          <rect x="76" y="28" width="18" height="58" rx="3" fill="#f87171"/><rect x="76" y="36" width="18" height="4" fill="#dc2626"/>
+          <rect x="97" y="34" width="26" height="52" rx="3" transform="rotate(12 110 60)" fill="#60a5fa"/>
+          <circle cx="114" cy="18" r="13" fill="#fff" opacity=".95"/><text x="114" y="23.5" text-anchor="middle" font-size="16" font-weight="700" fill="#6d28d9">π</text>
+        </svg>
+      </div>
 
       <fieldset>
-        <legend data-i18n="home.subject">Subject</legend>
-        <div class="chips chips-4 subject" id="subjectChips"></div>
+        <legend class="sec-title" data-i18n="home.subject">Subject</legend>
+        <div class="tiles" id="subjectChips"></div>
         <p class="muted small note" id="subjectNote"></p>
       </fieldset>
 
+      <h3 class="sec-title" id="optionsTitle" data-i18n="home.heading">Set up your practice</h3>
       <div id="practiceOptions" class="card form-card">
         <div class="field-row">
           <div class="field">
@@ -169,9 +183,12 @@
         <p id="resTime" class="muted small" hidden></p>
       </div>
       <div id="resCats" class="res-cats" hidden></div>
-      <p id="resLocked" class="muted" data-i18n="res.locked"></p>
+      <p id="resLocked" class="muted small" data-i18n="res.locked"></p>
+      <h3 class="sec-title" data-i18n="rev.heading">Review your answers</h3>
+      <p class="muted small" id="resReviewTip" data-i18n="rev.tip"></p>
       <button type="button" id="unlockBtn" class="btn secondary" data-i18n="res.unlock">Parent: show answers</button>
       <ol id="resList" class="review"></ol>
+      <div id="resSimilar"></div>
       <button type="button" id="printResults" class="btn secondary"><span aria-hidden="true">🖨️</span> <span data-i18n="print.results">Print these questions</span></button>
       <button type="button" id="againBtn" class="btn primary" data-i18n="res.again">Practise again</button>
       <button type="button" id="homeBtn" class="btn ghost" data-i18n="res.home">Change settings</button>
@@ -221,6 +238,12 @@
       </div>
 
       <div class="card">
+        <h3 data-i18n="parent.reviewHeading">Review</h3>
+        <label class="check"><input type="checkbox" id="methodsToggle"> <span data-i18n="parent.methodsToggle">Students can open the worked method in the review</span></label>
+        <p class="muted small" data-i18n="parent.methodsNote"></p>
+      </div>
+
+      <div class="card">
         <h3 data-i18n="parent.pinHeading">Parent PIN</h3>
         <p class="muted small" data-i18n="pin.note"></p>
         <button type="button" id="changePin" class="btn secondary" data-i18n="parent.changePin">Change PIN</button>
@@ -229,6 +252,14 @@
       <button type="button" id="lockBtn" class="btn ghost" data-i18n="parent.lock">Lock parent mode</button>
     </section>
   </main>
+
+  <nav class="bottom-nav" aria-label="Main">
+    <button type="button" class="tab" data-go="home"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span class="tl" data-i18n="nav.home">Home</span></button>
+    <button type="button" class="tab" data-go="progress"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg><span class="tl" data-i18n="nav.progress">Progress</span></button>
+    <button type="button" id="fabStart" class="fab" data-i18n-aria="home.start"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg></button>
+    <button type="button" class="tab" id="navStudents"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.8-3.6 3.4-5.5 6.5-5.5s5.7 1.9 6.5 5.5"/><path d="M16 4.6a3.3 3.3 0 0 1 0 6.6M18 14.8c2 .7 3.2 2.5 3.6 5.2"/></svg><span class="tl" data-i18n="nav.students">Students</span></button>
+    <button type="button" class="tab" id="navParent" data-go="parent"><svg class="ni" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="tl" data-i18n="nav.settings">Settings</span></button>
+  </nav>
 
   <dialog id="pinDialog" aria-labelledby="pinTitle">
     <form method="dialog" id="pinForm" novalidate>
@@ -285,6 +316,7 @@
   <script src="./js/gen-ga.js"></script>
   <script src="js/gen-selective.js"></script>
   <script src="./js/gen-comp.js"></script>
+  <script src="./js/similar.js"></script>
   <script src="./js/ai.js"></script>
   <script src="./js/app.js"></script>
 </body>

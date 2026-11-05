@@ -317,6 +317,7 @@
       const tpl = pick(pool), q = tpl.fn();
       if (q && q.value !== null && Number.isFinite(q.value)) {
         recent.push(tpl); if (recent.length > 8) recent.shift();
+        q.ref = { oly: T.indexOf(tpl), year, diff: d, subject: 'maths' };
         if (tag) q.topic = tag; q.olympiad = true; return q;
       }
     }
