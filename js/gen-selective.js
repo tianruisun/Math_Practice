@@ -98,7 +98,10 @@
   }
 
   const T = { 1: [], 2: [], 3: [] };
-  const add = (tier, topic, fn) => T[tier].push({ topic, fn });
+  const add = (tier, topic, fn) => {
+    const i = T[tier].length;
+    T[tier].push({ topic, fn: () => { const q = fn(); if (q) q.ref = { sel: [tier, i] }; return q; } });
+  };
 
   /* ======================= Tier 1 – easier ======================= */
   add(1, 'smeas', () => {   // 24-hour time → 12-hour

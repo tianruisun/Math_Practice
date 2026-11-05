@@ -15,7 +15,7 @@
     set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
   };
-  const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai', profiles: 'mp.profiles' };
+  const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai', profiles: 'mp.profiles', methods: 'mp.methods' };
 
   /* ---------- student profiles: up to 3 per browser, each with its own progress and settings ---------- */
   const MAX_PROFILES = 3;
@@ -81,7 +81,11 @@
     pb.setAttribute('aria-pressed', String(S.parent));
     $('#parentLabel').textContent = t(S.parent ? 'nav.parentOn' : 'nav.parent');
     $('#parentIcon').textContent = S.parent ? '🔓' : '🔒';
-    $('#profileName').textContent = Profiles.name(Profiles.active);
+    const who = Profiles.name(Profiles.active);
+    $('#profileName').textContent = who;
+    $('#helloText').textContent = t('home.hello', { name: who });
+    $('#profileAvatar').textContent = (who.trim()[0] || 'S').toUpperCase();
+    document.body.classList.toggle('no-nav', S.screen === 'quiz' || S.screen === 'loading');
     ({ home: renderHome, loading: renderLoading, quiz: renderQuiz, results: renderResults, progress: renderProgress, parent: renderParent })[S.screen]();
   }
 
@@ -95,6 +99,21 @@
       inp.addEventListener('change', () => onChange(v));
       lab.append(inp, el('span', '', label));
       container.append(lab);
+    });
+  }
+
+  /* subject tiles: big cards with an icon (radio buttons underneath, so they work with keyboards and screen readers) */
+  const SUBJECT_ICON = { maths: '🧮', ga: '🧩', sel: '📝', comp: '🏆' };
+  function tiles(container, options, value, onChange) {
+    container.innerHTML = '';
+    options.forEach(([v, label, icon, sub], k) => {
+      const lab = el('label', 'tile t' + k);
+      const inp = el('input'); inp.type = 'radio'; inp.name = 'subject'; inp.value = String(v);
+      inp.checked = String(v) === String(value);
+      inp.addEventListener('change', () => onChange(v));
+      const box = el('span', 'tile-box');
+      box.append(el('span', 'tile-icon', icon), el('span', 'tile-label', label), el('span', 'tile-sub', sub));
+      lab.append(inp, box); container.append(lab);
     });
   }
 
@@ -135,7 +154,7 @@
     if (![1, 2, 3, 4].includes(st.diff)) st.diff = 2;
     if (!YEARS.includes(st.year)) st.year = 6;
     if (st.topic !== 'mixed' && !Gen.topicsFor(st.subject, st.year).includes(st.topic)) st.topic = 'mixed';
-    chips($('#subjectChips'), 'subject', SUBJECTS.map(s => [s, t('subject.' + s)]), st.subject, v => { st.subject = v; st.topic = 'mixed'; saveSettings(); renderHome(); });
+    tiles($('#subjectChips'), SUBJECTS.map(s => [s, t('subject.' + s), SUBJECT_ICON[s], t('subject.sub.' + s)]), st.subject, v => { st.subject = v; st.topic = 'mixed'; saveSettings(); renderHome(); });
     $('#subjectNote').textContent = t(st.subject === 'ga' ? 'home.gaNote' : st.subject === 'sel' ? 'home.selNote' : st.subject === 'comp' ? 'home.compNote' : 'home.levelNote');
     const isSel = st.subject === 'sel', isComp = st.subject === 'comp';
     $('#practiceOptions').hidden = isSel || isComp;
@@ -161,6 +180,10 @@
     });
     $('#countCustom').hidden = !isCustom;
     if (isCustom) $('#countCustom').value = st.count;
+    $('#heroSummary').textContent = isSel ? t('subject.sel') + ' · ' + t(st.selLen === 'short' ? 'sel.len.short' : 'sel.len.full')
+      : isComp ? t('topic.' + compPaper(st))
+      : [t('subject.' + st.subject), yearLabel(st.year), t('topic.' + st.topic), t('diff.short.' + st.diff)].join(' · ');
+    $('#optionsTitle').hidden = isSel || isComp;
     const ai = aiConfig();
     $('#sourceLine').textContent = ai ? t('home.source.ai', { name: AI.PROVIDERS[ai.provider].name }) : t('home.source.local');
   }
@@ -198,6 +221,7 @@
 
   async function startQuiz(settings) {
     if (isTimed(settings.subject)) return startTest(settings);
+    if (settings.similar) return startSimilar(settings.similar, settings.perQ);
     S.loadingKey = 'loading.ai';
     const { year, topic, diff, count } = settings, subject = settings.subject || 'maths';
     S.lastQuizSettings = Object.assign({}, settings);
@@ -227,6 +251,22 @@
       exam: false, questions, i: 0, page: 0, results: [],
       st: questions.map(() => ({ status: 'answering', tries: 0, given: [], sel: null, fbKey: '', draft: '' })),
       settings: Object.assign({ subject }, settings)
+    };
+    go('quiz');
+    focusCardInput(0);
+  }
+
+  /* reinforcement: n similar questions for each ticked review item */
+  function startSimilar(items, perQ) {
+    const questions = Similar.makeSet(items, perQ, 50);
+    if (!questions.length) return toast(t('rev.none'));
+    const first = items[0], fb = first.fb || {};
+    const settings = { subject: 'review', topic: 'similar', year: first.q.year || fb.year || S.settings.year, diff: first.q.diff || fb.diff || S.settings.diff, count: questions.length };
+    S.lastQuizSettings = { similar: items, perQ };
+    S.quiz = {
+      exam: false, questions, i: 0, page: 0, results: [],
+      st: questions.map(() => ({ status: 'answering', tries: 0, given: [], sel: null, fbKey: '', draft: '' })),
+      settings
     };
     go('quiz');
     focusCardInput(0);
@@ -542,6 +582,7 @@
       return { title: `${t('subject.comp')} – ${t('topic.' + paper)}`, info: compRules(paper, len).slice(0, 3).join(' · ') };
     }
     const subject = settings.subject || 'maths';
+    if (subject === 'review') return { title: t('topic.similar'), info: t('print.infoSimilar', { n }) };
     return {
       title: `${t('subject.' + subject)} – ${t('topic.' + (settings.topic || 'mixed'))}`,
       info: t('print.infoPractice', { n, subject: t('subject.' + subject), y: yearLabel(settings.year), diff: t('diff.' + settings.diff) })
@@ -635,7 +676,8 @@
       b[1] += 1; if (Q.results[i] && Q.results[i].ok) b[0] += 1;
     });
     const wrong = Q.questions.map((q, i) => (Q.results[i] && Q.results[i].ok ? null : {
-      topic: q.topic, type: q.type, q: q.q, fig: q.fig, answer: q.answer, choices: q.choices, correct: q.correct, sol: q.sol, given: (Q.results[i] && Q.results[i].given) || []
+      topic: q.topic, type: q.type, q: q.q, fig: q.fig, answer: q.answer, choices: q.choices, correct: q.correct, sol: q.sol, given: (Q.results[i] && Q.results[i].given) || [],
+      ref: q.ref, subject: q.subject, year: q.year, diff: q.diff
     })).filter(Boolean);
     const h = store.get(histKey(), []);
     h.push({
@@ -656,22 +698,96 @@
     $('#resLocked').hidden = S.parent;
     $('#unlockBtn').hidden = S.parent;
     const list = $('#resList'); list.innerHTML = '';
+    const fb = { subject: Q.settings.subject, year: Q.settings.year, diff: Q.settings.diff };
+    const picker = makePicker($('#resSimilar'), Q.questions.map((q, i) => (Q.results[i] && Q.results[i].ok ? null : { q, fb })));
     Q.questions.forEach((q, i) => {
       const r = Q.results[i] || { given: [], ok: false, tries: 0 };
-      const li = el('li', r.ok ? 'ok' : 'bad');
-      const head = el('p', 'q');
-      const qt = el('span'); qt.innerHTML = Fig.questionHTML(q.q[lang()] || q.q.en);
-      head.append(el('span', 'mark ' + (r.ok ? 'ok' : 'bad'), r.ok ? '✓ ' : '✗ '), document.createTextNode((i + 1) + '. '), qt);
-      li.append(head);
-      appendFig(li, q);
-      li.append(el('p', 'muted', t('res.yours', { a: givenText(q, r.given) }) + (r.ok && r.tries === 2 ? ' ' + t('res.second') : '')));
-      if (S.parent) {
-        const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: answerText(q) }))); li.append(p);
-        const sol = q.sol && (q.sol[lang()] || q.sol.en);
-        if (sol) li.append(el('p', 'muted small', t('res.solution', { s: sol })));
-      }
-      list.append(li);
+      list.append(reviewItem(q, r.given, r.ok, i + 1, r.ok && r.tries === 2 ? ' ' + t('res.second') : '', picker, i));
     });
+  }
+
+  /* ---------- review: one item, its worked method, and the "practise similar" picker ---------- */
+  const methodsOpen = () => S.parent || store.get(K.methods, true) !== false;
+  function solSteps(sol) {
+    const parts = String(sol).split(/(?<=[.;!?])\s+(?=[A-Z(√−0-9])|(?<=[。；])/).map(x => x.trim()).filter(Boolean);
+    return parts.length ? parts : [String(sol)];
+  }
+  function methodBlock(q) {
+    const sol = q.sol && (q.sol[lang()] || q.sol.en);
+    const d = el('details', 'method');
+    const sum = el('summary', '', t('rev.method'));
+    sum.addEventListener('click', async e => {
+      if (d.open || methodsOpen()) return;
+      e.preventDefault();                       // methods are switched off for students: ask for the parent PIN
+      if (await unlockParent()) toast(t('rev.methodUnlocked'));
+    });
+    d.append(sum);
+    if (!sol) d.append(el('p', 'muted small', t('rev.noMethod')));
+    else {
+      const steps = solSteps(sol), ol = el('ol', 'steps' + (steps.length === 1 ? ' one' : ''));
+      steps.forEach(x => { const li = el('li'); li.innerHTML = Fig.math(x); ol.append(li); });
+      d.append(ol);
+    }
+    return d;
+  }
+  function reviewItem(q, given, ok, num, extra, picker, idx) {
+    const li = el('li', ok ? 'ok' : 'bad');
+    const top = el('div', 'rv-top');
+    top.append(el('span', 'rv-mark ' + (ok ? 'ok' : 'bad'), ok ? '✓' : '✗'));
+    if (num) top.append(el('span', 'rv-num', t('rev.qnum', { n: num })));
+    top.append(el('span', 'badge', t('topic.' + q.topic)));
+    if (!ok && picker) top.append(picker.tick(idx));
+    li.append(top);
+    const qt = el('div', 'q'); qt.innerHTML = Fig.questionHTML(q.q[lang()] || q.q.en); li.append(qt);
+    appendFig(li, q);
+    li.append(el('p', 'rv-yours', t('res.yours', { a: givenText(q, given) }) + (extra || '')));
+    if (S.parent) { const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: answerText(q) }))); li.append(p); }
+    li.append(methodBlock(q));
+    return li;
+  }
+  /* items: one entry per review item, null for correct ones; returns tick(idx) for each wrong item */
+  function makePicker(host, items) {
+    host.innerHTML = '';
+    const picked = new Set(), ticks = new Map(), wrongIdx = items.map((x, i) => (x ? i : -1)).filter(i => i >= 0);
+    const bar = el('div', 'similar-bar');
+    if (!wrongIdx.length) { host.append(bar); bar.hidden = true; return { tick: () => el('span') }; }
+    const head = el('div', 'sb-head');
+    const title = el('p', 'sb-title', t('rev.similarTitle'));
+    const all = el('button', 'link', t('rev.selectAll')); all.type = 'button';
+    const info = el('p', 'muted small sb-info');
+    head.append(title, info, all);
+    const row = el('div', 'sb-row');
+    const sel = el('select', 'combo sb-count'); sel.setAttribute('aria-label', t('rev.howMany'));
+    [1, 2, 3, 5, 10].forEach(n => { const o = el('option', '', t('rev.perQ', { n })); o.value = n; sel.append(o); });
+    sel.value = String(S.settings.simN || 3);
+    const goBtn = el('button', 'btn primary sb-go'); goBtn.type = 'button';
+    row.append(sel, goBtn);
+    bar.append(head, row);
+    host.append(bar);
+    const update = () => {
+      const k = picked.size, n = Math.min(50, k * +sel.value);
+      info.textContent = k ? t('rev.selected', { k }) : t('rev.pickSome');
+      goBtn.disabled = !k; goBtn.textContent = k ? t('rev.practise', { n }) : t('rev.practise0');
+      all.textContent = t(picked.size === wrongIdx.length ? 'rev.selectNone' : 'rev.selectAll');
+      bar.classList.toggle('floating', k > 0);
+      title.hidden = k > 0;           // keep the button in reach while scrolling the list
+      host.style.paddingBottom = k > 0 ? (bar.offsetHeight + 24) + 'px' : '';
+      ticks.forEach((b, i) => { b.setAttribute('aria-pressed', String(picked.has(i))); b.closest('li') && b.closest('li').classList.toggle('picked', picked.has(i)); });
+    };
+    sel.addEventListener('change', () => { S.settings.simN = +sel.value; saveSettings(); update(); });
+    all.addEventListener('click', () => { if (picked.size === wrongIdx.length) picked.clear(); else wrongIdx.forEach(i => picked.add(i)); update(); });
+    goBtn.addEventListener('click', () => startSimilar([...picked].sort((a, b) => a - b).map(i => items[i]), +sel.value));
+    setTimeout(update, 0);
+    return {
+      tick(i) {
+        const b = el('button', 'tick'); b.type = 'button'; b.setAttribute('aria-pressed', 'false');
+        b.setAttribute('aria-label', t('rev.tickLabel')); b.title = t('rev.tickLabel');
+        b.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+        b.addEventListener('click', () => { if (picked.has(i)) picked.delete(i); else picked.add(i); update(); });
+        ticks.set(i, b);
+        return b;
+      }
+    };
   }
 
   /* ---------- PROGRESS ---------- */
@@ -707,23 +823,14 @@
     box.append(ul);
 
     box.append(el('h3', '', t('prog.review')));
-    const wrong = h.flatMap(x => x.wrong || []).slice(-15).reverse();
+    const wrong = h.flatMap(x => (x.wrong || []).map(w => ({ q: w, fb: { subject: x.subject, year: x.year, diff: x.diff } }))).slice(-15).reverse();
     if (!wrong.length) box.append(el('p', 'muted', t('prog.reviewNone')));
     else {
-      const ol = el('ol', 'review');
-      wrong.forEach(w => {
-        const li = el('li', 'bad');
-        const qp = el('div', 'q'); qp.innerHTML = Fig.questionHTML(w.q[lang()] || w.q.en); li.append(qp);
-        appendFig(li, w);
-        li.append(el('p', 'muted', t('res.yours', { a: givenText(w, w.given) })));
-        if (S.parent) {
-          const p = el('p'); p.append(el('span', 'ans', t('res.answer', { a: answerText(w) }))); li.append(p);
-          const sol = w.sol && (w.sol[lang()] || w.sol.en);
-          if (sol) li.append(el('p', 'muted small', t('res.solution', { s: sol })));
-        }
-        ol.append(li);
-      });
-      box.append(ol);
+      box.append(el('p', 'muted small', t('rev.tip')));
+      const ol = el('ol', 'review'), host = el('div');
+      const picker = makePicker(host, wrong);
+      wrong.forEach((w, i) => ol.append(reviewItem(w.q, w.q.given, false, 0, '', picker, i)));
+      box.append(ol, host);
     }
 
     if (!S.parent) box.append(el('p', 'muted small', t('prog.parentOnly')));
@@ -813,6 +920,7 @@
   let draftProvider = null;
   function renderParent() {
     renderPrompt();
+    $('#methodsToggle').checked = store.get(K.methods, true) !== false;
     const cfg = store.get(K.ai, { provider: 'local', key: '', model: '' });
     if (draftProvider === null) draftProvider = cfg.provider || 'local';
     chips($('#providerChips'), 'provider', ['local', 'claude', 'deepseek'].map(p => [p, t('parent.provider.' + p)]), draftProvider, v => {
@@ -914,11 +1022,17 @@
   }
 
   /* ---------- wire up ---------- */
-  document.querySelectorAll('.tab').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tab[data-go]').forEach(b => b.addEventListener('click', async () => {
     if (S.screen === 'quiz' && !confirm(t(S.quiz && S.quiz.exam ? 'sel.quitConfirm' : 'quiz.quitConfirm'))) return;
     if (S.screen === 'quiz') { stopTimer(); S.quiz = null; }
+    if (b.dataset.go === 'parent') { if (await unlockParent()) { draftProvider = null; delete $('#aiKey').dataset.touched; go('parent'); } return; }
     go(b.dataset.go);
   }));
+  const startOrHome = () => (S.screen === 'home' ? startQuiz(S.settings) : go('home'));
+  $('#fabStart').addEventListener('click', startOrHome);
+  $('#heroStart').addEventListener('click', () => startQuiz(S.settings));
+  $('#navStudents').addEventListener('click', () => $('#profileBtn').click());
+  $('#methodsToggle').addEventListener('change', e => { store.set(K.methods, e.target.checked); toast(t('parent.saved')); });
   $('#langBtn').addEventListener('click', () => {
     window.I18N.setLang(lang() === 'zh' ? 'en' : 'zh');
     render();   // instant: re-renders text only, the typed answer and quiz state are untouched

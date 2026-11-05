@@ -198,5 +198,36 @@ t('ai money unit', () => { const q = AI.toQuestion({ topic: 'pct', question_en: 
   });
 }
 
+/* similar questions for the review */
+{
+  require('../js/gen-selective.js'); const Sim = require('../js/similar.js');
+  for (const [sub, y, tp, d] of [['maths', 6, 'frac', 2], ['maths', 9, 'olymp', 4], ['maths', 4, 'word', 1], ['ga', 7, 'mixed', 2], ['maths', 12, 'calc', 3], ['maths', 2, 'mixed', 1]]) {
+    t(`similar ${sub} y${y} ${tp}`, () => {
+      for (const q of G.generateSet(sub, y, tp, d, 4)) {
+        const out = Sim.make(q, 3);
+        assert.ok(out.length >= 2, 'only ' + out.length + ' for ' + q.q.en);
+        out.forEach(x => {
+          assert.notStrictEqual(x.q.en + JSON.stringify(x.fig || ''), q.q.en + JSON.stringify(q.fig || ''));
+          if (q.ref && q.ref.oly !== undefined) assert.strictEqual(x.ref.oly, q.ref.oly);
+          else assert.strictEqual(x.ref.gen, q.ref.gen);
+          if (x.type !== 'mc') assert.ok(C.check(x, x.answer).ok, 'self-check');
+        });
+      }
+    });
+  }
+  t('similar selective uses the same template', () => {
+    const q = globalThis.Selective.generateTest('short')[5], out = Sim.make(q, 2);
+    assert.ok(out.length >= 1); out.forEach(x => assert.deepStrictEqual(x.ref.sel, q.ref.sel));
+  });
+  t('similar for old history items without ref', () => {
+    const out = Sim.make({ topic: 'pct', type: 'input', q: { en: 'What is 20% of 50?', zh: '' } }, 3, { subject: 'maths', year: 7, diff: 2 });
+    assert.strictEqual(out.length, 3); out.forEach(x => assert.strictEqual(x.ref.gen, 'pct'));
+  });
+  t('similar set is capped', () => {
+    const qs = G.generateSet('maths', 6, 'mixed', 2, 10).map(q => ({ q, fb: {} }));
+    assert.strictEqual(Sim.makeSet(qs, 10, 50).length, 50);
+  });
+}
+
 console.log(`${pass} passed, ${fail} failed (${gen} generated questions checked)`);
 process.exit(fail ? 1 : 0);
