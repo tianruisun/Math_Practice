@@ -555,3 +555,31 @@ legend.sec-title { padding: 0; }
 .sb-head { flex-wrap: wrap; }
 .sb-head .sb-info { flex: 1 1 100%; order: 3; }
 .similar-bar.floating .sb-head .sb-info { flex: 1; order: 0; }
+
+/* ---------- stars, badges ---------- */
+.stars { display: flex; justify-content: center; align-items: flex-end; gap: 0.35rem; margin: 0.1rem 0 0.4rem; }
+.star svg { display: block; width: 44px; height: 44px; fill: rgba(255, 255, 255, .22); stroke: rgba(255, 255, 255, .45); stroke-width: 1.2; stroke-linejoin: round; }
+.stars.big .star.s1 svg { width: 62px; height: 62px; }
+.stars.big .star.s1 { margin-bottom: 0.45rem; }
+.star.on svg { fill: #fcd34d; stroke: #f59e0b; filter: drop-shadow(0 4px 8px rgba(120, 60, 0, .35)); }
+.star.on { animation: starPop .5s cubic-bezier(.2, 1.6, .5, 1) both; }
+.star.on.s1 { animation-delay: .15s; } .star.on.s2 { animation-delay: .3s; }
+@keyframes starPop { from { transform: scale(0) rotate(-30deg); opacity: 0; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .star.on { animation: none; } }
+.res-badge { display: flex; align-items: center; gap: 0.7rem; text-align: left; margin: 0.9rem auto 0.1rem; max-width: 22rem; background: rgba(255, 255, 255, .16); border: 1.5px solid rgba(255, 255, 255, .35); border-radius: 18px; padding: 0.6rem 0.9rem; font-size: 0.92rem; }
+.res-medal { font-size: 2.3rem; line-height: 1; flex: none; animation: starPop .6s .45s cubic-bezier(.2, 1.6, .5, 1) both; }
+.badge-shelf { display: flex; align-items: center; gap: 0.9rem; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow); padding: 0.85rem 1rem; margin: 0 0 1.2rem; }
+.medal { width: 58px; height: 58px; border-radius: 18px; background: #fef3c7; display: inline-flex; align-items: center; justify-content: center; font-size: 2rem; flex: none; }
+.medal.empty { filter: grayscale(1); opacity: .5; }
+.shelf-text { display: flex; flex-direction: column; }
+.shelf-text span { color: var(--muted); font-size: 0.92rem; }
+.avatar-wrap { position: relative; flex: none; }
+.avatar-badge { position: absolute; right: -8px; bottom: -6px; background: var(--surface); color: var(--ink); border-radius: 999px; padding: 0 0.35rem; font-size: 0.72rem; font-weight: 700; line-height: 1.5; box-shadow: var(--shadow); white-space: nowrap; }
+
+/* ---------- bottom bar: every slot the same size in every language ---------- */
+.bottom-nav { grid-template-columns: repeat(2, minmax(0, 1fr)) 72px repeat(2, minmax(0, 1fr)); }
+.tab, .tab[aria-current="page"] { flex-direction: column; gap: 3px; width: 100%; min-width: 0; height: 56px; min-height: 56px; padding: 0 2px; font-size: 0.7rem; box-shadow: none; }
+.tab .ni, .tab[aria-current="page"] .ni { width: 23px; height: 23px; flex: none; }
+.tab .tl { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.2; }
+.tab[aria-current="page"] { background: var(--pri-soft); color: var(--pri); }
+.round-btn { width: 46px; min-width: 46px; padding: 0; font-size: 0.85rem; }
