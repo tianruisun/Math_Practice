@@ -50,7 +50,10 @@
   function mc(o) {
     const norm = c => (typeof c === 'object' ? c : both(c));
     const right = norm(o.correct);
-    const seen = new Set([right.en]);
+    // options are compared by value, so "2/6" and "1/3" count as the same option
+    const valueOf = str => { const f = /^(\d+)\/(\d+)$/.exec(str); if (!f || +f[2] === 0) return str; const g = gcd(+f[1], +f[2]) || 1; return (+f[1] / g) + '/' + (+f[2] / g); };
+    const keys = new Set([valueOf(right.en)]);
+    const seen = { has: x => keys.has(valueOf(x)), add: x => keys.add(valueOf(x)) };
     const wrong = [];
     for (const w of o.wrong.map(norm)) {
       if (!w.en || seen.has(w.en)) continue;
@@ -59,6 +62,17 @@
     }
     // top up with near values when the answer is a number (optionally with a unit) or a single letter
     const want = (o.options || 4) - 1, m = right.en.match(/^(\u2212?-?\d+(?:\.\d+)?)(\D*)$/);
+    // a fraction answer such as "1/3": near fractions with a different value (2/3, 1/4, 1/2 \u2026)
+    const f = right.en.match(/^(\d+)\/(\d+)$/);
+    if (f) {
+      const a = +f[1], b = +f[2];
+      for (const [p, q] of [[a + 1, b], [a, b + 1], [a, b - 1], [a - 1, b], [b, a], [a + 2, b], [a, b + 2]]) {
+        if (wrong.length >= want) break;
+        if (p < 1 || (a < b && p >= q) || p * b === a * q) continue;   // skip zero, improper when the answer is proper, equal values
+        const cand = p + '/' + q;
+        if (!seen.has(cand)) { seen.add(cand); wrong.push(both(cand)); }
+      }
+    }
     for (let step = 1; wrong.length < want && step < 40; step++) {
       let cand = null;
       if (m) { const v = Number(m[1].replace('\u2212', '-')) + (step % 2 ? 1 : -1) * Math.ceil(step / 2); cand = num(v) + m[2]; }
@@ -154,6 +168,16 @@
       }
       const q = generate(subject, year, tp, diff);
       // chart questions can share wording, so the picture and options count too
+      const key = q.q.en + (q.fig ? JSON.stringify(q.fig) : '') + (q.choices ? q.choices.map(c => c.en).join('|') : '');
+      if (seen.has(key)) continue;
+      seen.add(key); out.push(q);
+    }
+    // Some early-years topics have fewer distinct questions than asked for (e.g. Year 1 fractions: 10).
+    // Fill the count from the year's other topics instead of quietly returning a short set; the caller can tell
+    // by the topic of each question.
+    const pool = topic === 'mixed' ? [] : shuffle(all.filter(k => k !== topic));
+    for (let tries = 0; out.length < n && pool.length && tries < n * 60; tries++) {
+      const q = generate(subject, year, pool[tries % pool.length], diff);
       const key = q.q.en + (q.fig ? JSON.stringify(q.fig) : '') + (q.choices ? q.choices.map(c => c.en).join('|') : '');
       if (seen.has(key)) continue;
       seen.add(key); out.push(q);

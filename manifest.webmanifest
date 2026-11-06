@@ -1,14 +1,14 @@
 {
   "name": "Maths & Reasoning · 数学与思维",
   "short_name": "Maths & Reasoning",
-  "description": "Maths and reasoning practice for Years 4 to 10 in English and Simplified Chinese.",
+  "description": "Maths and reasoning practice for Years 1–12 and NSW HSC Extension 1 & 2, in English and Simplified Chinese.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#f3f6fb",
-  "theme_color": "#0b3d91",
+  "background_color": "#f6f3fd",
+  "theme_color": "#f6f3fd",
   "lang": "en",
   "categories": ["education", "kids"],
   "icons": [

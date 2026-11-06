@@ -81,4 +81,4 @@ async function run(site, { local = false } = {}) {
   return { pass, fail };
 }
 
-module.exports = { run };
+module.exports = { run, launch };

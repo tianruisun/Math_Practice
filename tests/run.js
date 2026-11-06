@@ -48,7 +48,8 @@ for (const subject of ['maths', 'ga']) for (const y of G.YEARS) for (const d of 
       const reg = G.SUBJECTS[subject][q.topic];
       assert.ok(reg && reg.minYear <= y && y <= reg.maxYear, 'topic outside its years');
       if (q.fig) for (const l of ['en', 'zh']) { const h = FIGR.render(q.fig, l); assert.ok(h.startsWith('<figure') && !/NaN|undefined/.test(h), 'figure ' + q.fig.type); }
-      if (topic !== 'mixed') assert.strictEqual(q.topic, topic);
+      // v1.6.4 (F.3): a topic with too few distinct questions is topped up from the year's other topics, after its own
+      if (topic !== 'mixed' && q.topic !== topic) assert.ok(set.slice(set.indexOf(q)).every(x => x.topic !== topic), 'top-up before the topic ran out');
     });
     if (q.type === 'mc') {
       t(id + ' mc', () => {
@@ -197,6 +198,24 @@ t('ai money unit', () => { const q = AI.toQuestion({ topic: 'pct', question_en: 
     assert.strictEqual(CP.minutes('amc_mp', 'full'), 60); assert.strictEqual(CP.minutes('amc_s', 'full'), 75); assert.strictEqual(CP.minutes('aimo', 'full'), 240);
   });
 }
+
+/* v1.6.4 full-review fixes */
+t('F.3 thin topics still give the number asked for', () => {
+  for (const [y, tp] of [[1, 'frac1'], [1, 'shape1']]) for (let k = 0; k < 5; k++) {
+    const s = G.generateSet('maths', y, tp, 1, 20);
+    assert.strictEqual(s.length, 20, `y${y} ${tp}: ${s.length}`);
+    assert.ok(s.filter(q => q.topic === tp).length >= 10, `y${y} ${tp}: too few from the topic`);
+  }
+});
+t('F.4 Year 1-3 fraction multiple choice has 4 options, all different values', () => {
+  for (const y of [1, 2, 3]) for (const d of [1, 2, 3, 4]) for (let k = 0; k < 100; k++) {
+    const q = G.generate('maths', y, 'frac1', d);
+    if (q.type !== 'mc') continue;
+    assert.strictEqual(q.choices.length, 4, q.choices.map(c => c.en).join(' | '));
+    const vals = q.choices.map(c => { const m = c.en.match(/^(\d+)\/(\d+)$/); return m ? +m[1] / +m[2] : c.en; });
+    assert.strictEqual(new Set(vals).size, 4, 'equal values: ' + q.choices.map(c => c.en).join(' | '));
+  }
+});
 
 /* similar questions for the review */
 {

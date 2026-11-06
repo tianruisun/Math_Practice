@@ -141,7 +141,7 @@ body.no-nav main { padding-bottom: max(2rem, env(safe-area-inset-bottom)); }
 .hero-text { position: relative; z-index: 1; flex: 1; min-width: 0; }
 .hero h2 { margin: 0; font-size: 1.32rem; color: #fff; }
 .hero-sub { margin: 0.25rem 0 0.8rem; font-size: 0.85rem; opacity: 0.92; }
-.hero-btn { min-height: 42px; padding: 0 1.15rem; border: 0; border-radius: 999px; background: #fff; color: #4c1d95; font: inherit; font-weight: 700; font-size: 0.9rem; cursor: pointer; box-shadow: 0 6px 14px rgba(30, 10, 80, .25); }
+.hero-btn { min-height: 44px; padding: 0 1.15rem; border: 0; border-radius: 999px; background: #fff; color: #4c1d95; font: inherit; font-weight: 700; font-size: 0.9rem; cursor: pointer; box-shadow: 0 6px 14px rgba(30, 10, 80, .25); }
 .hero-art { position: relative; z-index: 1; flex: none; width: 128px; height: auto; }
 @media (max-width: 360px) { .hero-art { width: 96px; } }
 .sec-title { display: block; font-size: 1.08rem; font-weight: 700; margin: 0 0 0.7rem; }
