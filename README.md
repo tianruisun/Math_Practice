@@ -37,10 +37,10 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 - **Progress:** sessions, accuracy, accuracy by topic, recent sessions, and questions to review. Stored only in this browser.
 - **PWA:** manifest, icons (incl. maskable and Apple touch icon), and a service worker with a cache version, so it works offline.
 
-## Publish on GitHub Pages
-1. Push to GitHub. In the repo: **Settings → Pages → Build and deployment → Deploy from a branch**, pick your branch and `/ (root)`.
-2. Open `https://<user>.github.io/<repo>/`. On a phone use **Add to Home Screen** / **Install app**.
-3. **After every change, bump `CACHE_VERSION` in `sw.js`** (e.g. `maths-v9` → `maths-v10`) so installed copies update. `publish.bat` does this for you on Windows. The app shows "A new version is ready – Reload" when an update arrives.
+## Publish
+The app is hosted on Cloudflare Pages: `main` is Production (https://student-practice.pages.dev) and `test` is the Test app (https://test.student-practice.pages.dev, with a red TEST badge). Changes reach them only through the release process; nobody pushes by hand.
+
+On a phone, open the address and use **Add to Home Screen** / **Install app**. The version lives in `version.js`, which also names the offline cache, so installed copies update when it changes. The app shows "A new version is ready – Reload" when an update arrives.
 
 ## AI keys
 - Claude: create a key at console.anthropic.com. Default model `claude-opus-5-5`; `claude-sonnet-5-5` and `claude-haiku-5-5` are cheaper/faster options in settings.
@@ -69,5 +69,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
 | `js/gen-selective.js` | Selective test (35 questions / 40 minutes, 5 options) |
 | `js/ai.js` | Claude / DeepSeek question generation (maths and general ability) and validation |
 | `js/app.js` | Screens, state, parent mode, progress |
-| `sw.js` | Service worker (bump `CACHE_VERSION` on release) |
-| `tests/run.js` | `node tests/run.js` – checker tests, and every generated question checked against its own answer |
+| `version.js` | App version (also names the offline cache) and the Production host names |
+| `js/test-badge.js` | TEST badge on every host that is not Production |
+| `sw.js` | Service worker; cache named after `version.js` |
+| `tests/` | `npm test` runs every suite; see `tests/README.md` |

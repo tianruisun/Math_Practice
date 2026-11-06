@@ -1,8 +1,11 @@
-/* Bump CACHE_VERSION on every release so phones pick up the new files. */
-const CACHE_VERSION = 'maths-v13';
+/* The cache is named after the app version in version.js, so each release replaces the old cache. */
+importScripts('./version.js');
+const CACHE_VERSION = 'maths-' + self.APP_VERSION;
 const ASSETS = [
   './',
   './index.html',
+  './version.js',
+  './js/test-badge.js',
   './css/style.css',
   './js/i18n.js',
   './js/checker.js',
