@@ -341,6 +341,42 @@ t('F.4 Year 1-3 fraction multiple choice has 4 options, all different values', (
     assert.strictEqual(r.history.length, 1); assert.strictEqual(r.history[0].correct, 8); assert.strictEqual(r.history[0].diff, 3);
     assert.strictEqual(r.badges[0].kind, 'firstTry'); assert.strictEqual(Rec.levelOf(r.badges[0]), 'maths:5:3');
   });
+  /* R1.1: a file the app accepts must not break a screen. Each field a screen reads is checked on import. */
+  const withData = o => Rec.COLUMNS.join(',') + '\r\nsession,,,,,,,,,,,,,,' + '"' + JSON.stringify(o).replace(/"/g, '""') + '"\r\n';
+  const ok = { date: 1762400000000, subject: 'maths', year: 4, topic: 'frac', diff: 2, n: 5, correct: 4 };
+  t('import checks inside data: stars kept to 0-3, time and marks in range', () => {
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, stars: 99 })).history[0].stars, undefined);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, stars: -1 })).history[0].stars, undefined);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, stars: 2 })).history[0].stars, 2);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, time: 'x' })).history[0].time, null);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, time: 5000 })).history[0].time, 5000);
+    const m = Rec.fromCSV(withData({ ...ok, marks: 50, maxMarks: 10 })).history[0];
+    assert.ok(!('marks' in m) && !('maxMarks' in m));
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, n: 2.5, correct: 1 })).skipped, 1);
+  });
+  t('import checks inside data: questions the review cannot show are dropped', () => {
+    const good = { topic: 'frac', type: 'input', q: { en: '1/2 + 1/4?' }, answer: '3/4', given: ['1'] };
+    const mc = { topic: 'pat', type: 'mc', q: { en: 'Pick', zh: '选' }, choices: [{ en: 'a' }, { en: 'b' }], correct: 1, given: [0, 9, 'x'] };
+    const wrong = [null, 5, { q: null }, { q: { en: 7 } }, { q: 'text' }, { type: 'mc', q: { en: 'x' }, choices: [{ en: 'a' }], correct: 3 },
+      { type: 'input', q: { en: 'no answer' } }, good, mc];
+    const s = Rec.fromCSV(withData({ ...ok, wrong })).history[0];
+    assert.strictEqual(s.wrong.length, 2);
+    assert.deepStrictEqual(s.wrong[0], good);
+    assert.deepStrictEqual(s.wrong[1].given, [0]);        // a choice that does not exist is not "given"
+  });
+  t('import checks inside data: byTopic, refs and figures are well-formed', () => {
+    const s = Rec.fromCSV(withData({ ...ok, byTopic: { frac: [4, 5], bad: [9, 5], worse: 'x', '__proto__': [1, 1] },
+      wrong: [{ type: 'input', q: { en: 'q' }, answer: 1, ref: { oly: 'constructor', sel: ['__proto__', 'x'], gen: 'frac', year: 99 }, fig: { type: 'x" onload="y' } }] })).history[0];
+    assert.deepStrictEqual(s.byTopic, { frac: [4, 5] });
+    assert.deepStrictEqual(s.wrong[0].ref, { gen: 'frac' });
+    assert.ok(!('fig' in s.wrong[0]));
+    assert.deepStrictEqual(Rec.fromCSV(withData({ ...ok, byTopic: 'x' })).history[0].byTopic, { frac: [4, 5] });
+  });
+  t('similar: a ref naming no real template does not throw', () => {
+    const Sim = require('../js/similar.js');
+    const item = { topic: 'frac', type: 'input', q: { en: 'q' }, answer: '1', ref: { oly: 'constructor', sel: ['constructor', 'name'] } };
+    assert.doesNotThrow(() => Sim.makeSet([{ q: item, fb: { subject: 'maths', year: 4, diff: 2 } }], 2, 10));
+  });
   t('import merge: no duplicates, oldest first, capped', () => {
     const a = [{ date: 3, subject: 'm', n: 1, correct: 1 }, { date: 1, subject: 'm', n: 1, correct: 1 }];
     const m = Rec.merge(a, [{ date: 1, subject: 'm', n: 1, correct: 1 }, { date: 2, subject: 'm', n: 1, correct: 0 }], Rec.sessionKey, 2);

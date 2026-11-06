@@ -103,17 +103,81 @@
   const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
   const json = v => { try { const o = JSON.parse(v); return o && typeof o === 'object' && !Array.isArray(o) ? o : null; } catch (e) { return null; } };
 
-  /* A session from a file, checked: numbers in range, a date, and text fields as text. Returns null if unusable. */
+  const isObj = v => !!v && typeof v === 'object' && !Array.isArray(v);
+  const int = (v, lo, hi) => { const n = num(v, lo, hi); return n !== null && Number.isInteger(n) ? n : null; };
+  /* Text in both languages, as the screens read it: { en, zh? }, en required. */
+  const text2 = (v, max) => (isObj(v) && typeof v.en === 'string'
+    ? Object.assign({ en: v.en.slice(0, max) }, typeof v.zh === 'string' ? { zh: v.zh.slice(0, max) } : {}) : null);
+
+  /* A question to review, from a file: only the fields the review screens read, each of the shape they expect.
+     Returns null when the question could not be shown. */
+  function cleanWrong(w) {
+    if (!isObj(w)) return null;
+    const q = text2(w.q, 2000);
+    if (!q) return null;
+    const out = { q, topic: str(w.topic, 40) || 'mixed', type: w.type === 'mc' ? 'mc' : str(w.type, 20) || 'num' };
+    if (out.type === 'mc') {
+      const choices = Array.isArray(w.choices) ? w.choices.slice(0, 5).map(c => text2(c, 500)) : [];
+      const correct = int(w.correct, 0, choices.length - 1);
+      if (choices.length < 2 || choices.includes(null) || correct === null) return null;
+      out.choices = choices; out.correct = correct;
+      out.given = (Array.isArray(w.given) ? w.given : []).map(i => int(i, 0, choices.length - 1)).filter(i => i !== null).slice(0, 5);
+    } else {
+      if (typeof w.answer !== 'string' && typeof w.answer !== 'number') return null;
+      out.answer = String(w.answer).slice(0, 200);
+      out.given = (Array.isArray(w.given) ? w.given : []).filter(g => typeof g === 'string' || typeof g === 'number').map(g => String(g).slice(0, 200)).slice(0, 5);
+    }
+    const sol = text2(w.sol, 4000); if (sol) out.sol = sol;
+    if (isObj(w.fig) && WORD.test(w.fig.type || '')) out.fig = w.fig;
+    const ref = cleanRef(w.ref); if (ref) out.ref = ref;
+    if (QUESTION_SUBJECTS.includes(w.subject)) out.subject = w.subject;
+    const year = int(w.year, 1, 14), diff = int(w.diff, 1, 4);
+    if (year !== null) out.year = year;
+    if (diff !== null) out.diff = diff;
+    return out;
+  }
+  const WORD = /^[a-z][a-z0-9_]{0,39}$/i;
+  const QUESTION_SUBJECTS = ['maths', 'ga', 'sel', 'comp'];
+  /* Where a question came from, used by "practise similar" to make more like it. */
+  function cleanRef(r) {
+    if (!isObj(r)) return null;
+    const out = {};
+    const oly = int(r.oly, 0, 100000); if (oly !== null) out.oly = oly;
+    if (Array.isArray(r.sel) && r.sel.length === 2 && int(r.sel[0], 1, 3) !== null && int(r.sel[1], 0, 100000) !== null) out.sel = [r.sel[0], r.sel[1]];
+    if (WORD.test(r.gen || '')) out.gen = r.gen;
+    if (QUESTION_SUBJECTS.includes(r.subject)) out.subject = r.subject;
+    const year = int(r.year, 1, 14), diff = int(r.diff, 1, 4);
+    if (year !== null) out.year = year;
+    if (diff !== null) out.diff = diff;
+    return Object.keys(out).length ? out : null;
+  }
+
+  /* A session from a file, checked: numbers in range, a date, and text fields as text. Every field a screen reads is
+     checked here, so a file the app accepts cannot break a screen. Returns null if unusable. */
   function cleanSession(o, row) {
     const date = num(o.date, 0, 4102444800000) || Date.parse(row.date);
-    const n = num(o.n !== undefined ? o.n : row.questions, 1, 200), correct = num(o.correct !== undefined ? o.correct : row.correct, 0, 200);
+    const n = int(o.n !== undefined ? o.n : row.questions, 1, 200), correct = int(o.correct !== undefined ? o.correct : row.correct, 0, 200);
     if (!date || n === null || correct === null || correct > n) return null;
     const s = Object.assign({}, o, {
       date, n, correct, subject: str(o.subject || row.subject, 20) || 'maths', topic: str(o.topic || row.topic, 40) || 'mixed',
-      year: num(o.year !== undefined ? o.year : row.year, 1, 14), diff: num(o.diff !== undefined ? o.diff : row.difficulty, 1, 4)
+      year: int(o.year !== undefined ? o.year : row.year, 1, 14), diff: int(o.diff !== undefined ? o.diff : row.difficulty, 1, 4)
     });
-    if (!Array.isArray(s.wrong)) s.wrong = [];
-    if (!s.byTopic || typeof s.byTopic !== 'object') s.byTopic = { [s.topic]: [correct, n] };
+    const stars = int(o.stars !== undefined ? o.stars : row.stars, 0, 3);
+    if (stars !== null) s.stars = stars; else delete s.stars;
+    // time in ms; a row typed in a spreadsheet gives seconds
+    const sec = row.seconds === '' ? null : num(row.seconds, 0, 86400);
+    s.time = o.time !== undefined && o.time !== null ? num(o.time, 0, 86400000) : sec !== null ? sec * 1000 : null;
+    const marks = num(o.marks, 0, 1000), maxMarks = num(o.maxMarks, 1, 1000);
+    if (marks !== null && maxMarks !== null && marks <= maxMarks) { s.marks = marks; s.maxMarks = maxMarks; } else { delete s.marks; delete s.maxMarks; }
+    s.wrong = (Array.isArray(o.wrong) ? o.wrong.slice(0, 200) : []).map(cleanWrong).filter(Boolean);
+    const by = {};
+    if (isObj(o.byTopic)) {
+      for (const k of Object.keys(o.byTopic).slice(0, 50)) {
+        const v = o.byTopic[k], c = Array.isArray(v) ? int(v[0], 0, 200) : null, t = Array.isArray(v) ? int(v[1], 1, 200) : null;
+        if (WORD.test(k) && c !== null && t !== null && c <= t) by[k] = [c, t];
+      }
+    }
+    s.byTopic = isObj(o.byTopic) ? by : { [s.topic]: [correct, n] };   // timed papers record none
     return s;
   }
   function cleanBadge(o, row) {
@@ -122,10 +186,12 @@
     const kind = KINDS.includes(o.kind || row.badge) ? (o.kind || row.badge) : 'perfect';
     const b = Object.assign({}, o, { date, kind, subject: str(o.subject || row.subject, 20) || 'maths' });
     // a timed-paper badge has no year or difficulty: only keep the ones that are there
-    const year = num(o.year !== undefined ? o.year : row.year, 1, 14), diff = num(o.diff !== undefined ? o.diff : row.difficulty, 1, 4);
+    const year = int(o.year !== undefined ? o.year : row.year, 1, 14), diff = int(o.diff !== undefined ? o.diff : row.difficulty, 1, 4);
     if (year !== null) b.year = year; else delete b.year;
     if (diff !== null) b.diff = diff; else delete b.diff;
     if (b.paper !== undefined) b.paper = str(b.paper, 40);
+    if (b.topic !== undefined) b.topic = str(b.topic, 40);
+    if (b.n !== undefined) { const n = int(b.n, 1, 200); if (n !== null) b.n = n; else delete b.n; }
     return b;
   }
 

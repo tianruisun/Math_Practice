@@ -273,6 +273,52 @@ async function run(site) {
       check('v1.7 a wrong file is refused with a message', /not a Student Practice progress file/.test(await page.textContent('#toast')), await page.textContent('#toast'));
       await context.close();
     });
+
+    // R1.1 (v1.7.0): a crafted progress file cannot break Progress; a bad record already stored hides only its own part
+    await flow('R1.1 bad records', async () => {
+      const os = require('os'), fs = require('fs'), path = require('path'), Rec = require('../js/records.js');
+      const t0 = Date.parse('2026-10-01T10:00:00Z');
+      const crafted = { date: t0, subject: 'maths', year: 4, topic: 'frac', diff: 2, n: 5, correct: 4, stars: 99, byTopic: { frac: [4, 5] }, wrong: [{ q: null }, { type: 'input', q: { en: 'Kept 1/2?' }, answer: '1/2', given: [] }] };
+      const file = path.join(os.tmpdir(), 'Student_Practice-tests', 'crafted.csv');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, Rec.COLUMNS.join(',') + '\r\nsession,,,,,,,,,,,,,,"' + JSON.stringify(crafted).replace(/"/g, '""') + '"\r\n');
+      const { context, page, errors } = await freshPage(browser, site, { [SETTINGS]: settings() });
+      await page.click('#parentBtn');
+      await typePin(page);
+      await page.setInputFiles('#csvImport', file);
+      await page.waitForTimeout(300);
+      const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('sp.history.p1') || '[]'));
+      check('R1.1 import stores stars in range and only showable questions', stored.length === 1 && stored[0].stars === undefined && stored[0].wrong.length === 1, JSON.stringify(stored));
+      await page.click('.tab[data-go="progress"]');
+      check('R1.1 imported file: Progress lists the session', (await page.locator('#progBody ul.plain li').count()) >= 1);
+      check('R1.1 imported file: the question to review shows', (await page.locator('#progBody ol.review > li').count()) === 1);
+      check('R1.1 imported file: no page errors', errors.length === 0, errors.join(' | '));
+      // records stored as they were before this fix: the screen still opens and Clear progress is there
+      await page.evaluate(c => localStorage.setItem('sp.history.p1', JSON.stringify([c])), crafted);
+      const logged = [];
+      page.on('console', m => { if (m.type() === 'error') logged.push(m.text()); });
+      await page.click('.tab[data-go="home"]');
+      await page.click('.tab[data-go="progress"]');
+      check('R1.1 stored bad record: Clear progress is there', (await page.locator('#clearProgress').count()) === 1);
+      check('R1.1 stored bad record: the other parts still show', (await page.locator('#progBody .stats').count()) === 1 && (await page.locator('#progBody .badge-shelf').count()) === 1);
+      check('R1.1 stored bad record: no uncaught page errors', errors.length === 0, errors.join(' | '));
+      await page.click('#clearProgress');
+      check('R1.1 Clear progress recovers', (await page.evaluate(() => localStorage.getItem('sp.history.p1'))) === null);
+      await context.close();
+    });
+
+    // R1.2 (v1.7.0): a year picked by hand is kept when a new school year moves the suggestion; one that was the suggestion moves on
+    await flow('R1.2 hand-picked year', async () => {
+      const y = new Date().getFullYear();
+      const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ann', schoolYear: 5, schoolYearSet: y - 1 }], active: 'p1' });   // Year 6 now
+      let { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 8, suggested: 5 }) });
+      check('R1.2 hand-picked Year 8 stays in a new school year', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
+      check('R1.2 the new suggestion is remembered', (await page.evaluate(k => JSON.parse(localStorage.getItem(k)).suggested, SETTINGS)) === 6);
+      await context.close();
+      ({ context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 5, suggested: 5 }) }));
+      check('R1.2 a year that was the suggestion moves up', (await page.inputValue('#yearSel')) === '6', await page.inputValue('#yearSel'));
+      await context.close();
+    });
   } finally {
     await browser.close();
   }

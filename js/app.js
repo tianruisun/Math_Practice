@@ -915,31 +915,51 @@
   function renderProgress() {
     const box = $('#progBody'); box.innerHTML = '';
     $('#progH').textContent = t('prog.headingFor', { name: Profiles.name(Profiles.active) });
-    const h = store.get(histKey(), []);
+    // Each section is drawn on its own, so a record the screen cannot read hides only its own part, and
+    // "Clear progress" is always there to recover (R1.1, v1.7.0).
+    try { progressSections(box); } catch (e) { console.error('progress', e); }
+    appendClearButton(box);
+  }
+  function progressSections(box) {
+    const part = fn => { try { fn(); } catch (e) { console.error('progress section', e); } };
+    const h = (store.get(histKey(), []) || []).filter(x => x && typeof x === 'object');
     if (!h.length) { box.append(el('p', 'muted', t('prog.none'))); return; }
+    part(() => progressTop(box, h));
+    part(() => renderBadges(box));
+    part(() => progressTopics(box, h));
+    part(() => progressRecent(box, h));
+    part(() => progressReview(box, h));
+    if (!S.parent) box.append(el('p', 'muted small', t('prog.parentOnly')));
+  }
+  function progressTop(box, h) {
     const total = h.reduce((s, x) => s + x.n, 0), correct = h.reduce((s, x) => s + x.correct, 0);
     const stats = el('div', 'stats');
     [[h.length, 'prog.sessions'], [total, 'prog.questions'], [Math.round(100 * correct / total) + '%', 'prog.accuracy']].forEach(([v, k]) => {
       const d = el('div', 'stat'); d.append(el('b', '', String(v)), el('span', '', t(k))); stats.append(d);
     });
     box.append(stats);
-    renderBadges(box);
-
+  }
+  function progressTopics(box, h) {
     const by = {};
     h.forEach(x => { for (const k in x.byTopic) { const b = by[k] = by[k] || [0, 0]; b[0] += x.byTopic[k][0]; b[1] += x.byTopic[k][1]; } });
     box.append(el('h3', '', t('prog.byTopic')));
     Object.keys(by).sort((a, b) => by[a][0] / by[a][1] - by[b][0] / by[b][1]).forEach(k => box.append(topicBar(k, by[k][0], by[k][1], true)));
-
+  }
+  function progressRecent(box, h) {
     box.append(el('h3', '', t('prog.recent')));
     const ul = el('ul', 'plain');
     const fmtDate = d => new Date(d).toLocaleDateString(lang() === 'zh' ? 'zh-CN' : 'en-AU', { day: 'numeric', month: 'short' });
     h.slice(-8).reverse().forEach(x => ul.append(el('li', '', t('prog.row', {
       date: fmtDate(x.date), year: isTimed(x.subject) ? '⏱ ' + mmss(x.time || 0) : yearLabel(x.year), topic: t('subject.' + (x.subject || 'maths')) + ' – ' + t('topic.' + x.topic), c: x.correct, n: x.n
-    }) + (x.maxMarks ? ' · ' + t('comp.marksShort', { m: x.marks, total: x.maxMarks }) : '') + ' ' + '★'.repeat(x.stars !== undefined ? x.stars : starsFor(x.correct, x.n)) + '☆'.repeat(3 - (x.stars !== undefined ? x.stars : starsFor(x.correct, x.n))))));
+    }) + (x.maxMarks ? ' · ' + t('comp.marksShort', { m: x.marks, total: x.maxMarks }) : '') + ' ' + starText(x))));
     box.append(ul);
-
+  }
+  const starText = x => { const k = [0, 1, 2, 3].includes(x.stars) ? x.stars : starsFor(x.correct, x.n); return '★'.repeat(k) + '☆'.repeat(3 - k); };
+  function progressReview(box, h) {
     box.append(el('h3', '', t('prog.review')));
-    const wrong = h.flatMap(x => (x.wrong || []).map(w => ({ q: w, fb: { subject: x.subject, year: x.year, diff: x.diff } }))).slice(-15).reverse();
+    // only questions the review can show (text in English at least)
+    const shown = w => w && w.q && typeof w.q.en === 'string' && (w.type !== 'mc' || Array.isArray(w.choices));
+    const wrong = h.flatMap(x => (Array.isArray(x.wrong) ? x.wrong : []).filter(shown).map(w => ({ q: w, fb: { subject: x.subject, year: x.year, diff: x.diff } }))).slice(-15).reverse();
     if (!wrong.length) box.append(el('p', 'muted', t('prog.reviewNone')));
     else {
       box.append(el('p', 'muted small', t('rev.tip')));
@@ -948,9 +968,6 @@
       wrong.forEach((w, i) => ol.append(reviewItem(w.q, w.q.given, false, 0, '', picker, i)));
       box.append(ol, host);
     }
-
-    if (!S.parent) box.append(el('p', 'muted small', t('prog.parentOnly')));
-    appendClearButton(box);
   }
 
   /* Clear progress: always visible, protected by the parent PIN */
@@ -1180,12 +1197,15 @@
     });
     return f;
   }
-  /* Choose the year the student most likely practises, when it changes (details edited, a new school year).
-     A year picked by hand on Home stays until then. */
+  /* Choose the year the student most likely practises: when the details are saved (force), the first time a
+     suggestion exists, and when a new school year moves the suggestion on. A year picked by hand on Home (one that
+     is not the last suggestion) is a parent's choice and is kept; the new suggestion is only remembered (R1.2, v1.7.0). */
   function applySuggestedYear(force) {
-    const y = Records.suggestYear(Profiles.active, new Date());
-    if (!y || (!force && S.settings.suggested === y)) return;
-    S.settings.year = y; S.settings.suggested = y; saveSettings();
+    const y = Records.suggestYear(Profiles.active, new Date()), st = S.settings;
+    if (!y || (!force && st.suggested === y)) return;
+    const handPicked = st.suggested !== undefined && st.suggested !== null && st.year !== st.suggested;
+    if (force || !handPicked) st.year = y;
+    st.suggested = y; saveSettings();
   }
   function renderProfiles() {
     const ul = $('#profileList'); ul.innerHTML = '';

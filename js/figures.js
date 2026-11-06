@@ -239,7 +239,7 @@
 
   const R = { bar, line: lineGraph, dial, jug, clock, spinner, shape, grid, picto, table, pie, coord, triangle };
   function render(fig, lang) {
-    if (!fig || !R[fig.type]) return '';
+    if (!fig || !Object.prototype.hasOwnProperty.call(R, fig.type)) return '';
     try { return `<figure class="fig fig-${fig.type}">${R[fig.type](fig, lang || 'en')}</figure>`; }
     catch (e) { console.warn('figure failed', e); return ''; }
   }
