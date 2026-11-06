@@ -206,11 +206,19 @@ t('ai money unit', () => { const q = AI.toQuestion({ topic: 'pct', question_en: 
       for (const q of G.generateSet(sub, y, tp, d, 4)) {
         const out = Sim.make(q, 3);
         assert.ok(out.length >= 2, 'only ' + out.length + ' for ' + q.q.en);
-        out.forEach(x => {
+        const oly = q.ref && q.ref.oly !== undefined;
+        const same = x => oly ? x.ref.oly === q.ref.oly : x.ref.gen === q.ref.gen;
+        out.forEach((x, i) => {
           assert.notStrictEqual(x.q.en + JSON.stringify(x.fig || ''), q.q.en + JSON.stringify(q.fig || ''));
-          if (q.ref && q.ref.oly !== undefined) assert.strictEqual(x.ref.oly, q.ref.oly);
-          else assert.strictEqual(x.ref.gen, q.ref.gen);
           if (x.type !== 'mc') assert.ok(C.check(x, x.answer).ok, 'self-check');
+          if (same(x)) return;
+          // Another problem type is allowed only after the template ran out of new versions (by design in similar.js).
+          assert.ok(oly, 'topic changed: ' + x.ref.gen + ' for ' + q.ref.gen);
+          assert.ok(out.slice(0, i).every(same), 'same-template questions must come first');
+          const versions = new Set(); const fn = globalThis.Olympiad.T[q.ref.oly].fn;
+          for (let k = 0; k < 300; k++) { const v = fn(); if (v) versions.add(v.q.en + '|' + v.answer); }
+          versions.delete(q.q.en + '|' + q.answer);
+          assert.ok(versions.size < 3, `template ${q.ref.oly} has ${versions.size} other versions but only ${i} were used`);
         });
       }
     });

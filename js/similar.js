@@ -22,7 +22,8 @@
 
   function fromTemplate(fn, n, orig) {
     const out = [], seen = new Set([keyOf(orig)]);
-    for (let i = 0; i < n * 8 && out.length < n; i++) {
+    // Some templates have only a handful of versions; 8 tries per question often missed one that exists.
+    for (let i = 0; i < n * 30 && out.length < n; i++) {
       const q = fn(); if (!q) continue;
       const k = keyOf(q); if (seen.has(k)) continue;
       seen.add(k); out.push(q);
