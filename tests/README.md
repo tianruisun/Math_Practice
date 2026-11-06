@@ -13,6 +13,7 @@ Each run prints a count per suite and exits non-zero if anything failed.
 | Suite | File | Covers |
 |---|---|---|
 | unit | `run.js` | answer checker; every generated question accepts its own answer; AI parsing; competition papers |
+| kit | `kit.js` | the test kit: `serve.js` finds files with the folder written five ways, `../` cannot leave the folder, a folder with no `index.html` is refused |
 | smoke | `smoke.js` | page loads with no console errors; fits a 375px phone; TEST badge shows `TEST v<version>` off Production and is absent on Production; offline cache is named after `version.js` |
 
 Screenshots go to `<system temp>/Student_Practice-tests/`, never into the repo.
