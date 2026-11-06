@@ -30,6 +30,7 @@ async function openPage(browser, url, options = {}) {
       route.fulfill({ status: 200, contentType: TYPES[path.extname(file)], body: fs.readFileSync(file) });
     });
   }
+  context.setDefaultTimeout(20000);   // no single step may wait longer than 20 s
   const page = await context.newPage();
   const errors = [];
   page.on('console', m => { if (m.type() === 'error') errors.push(m.text()); });
