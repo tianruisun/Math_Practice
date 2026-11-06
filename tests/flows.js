@@ -341,6 +341,36 @@ async function run(site) {
       await context.close();
     });
 
+    // R3.1 (v1.7.0): a birth-month edit that does not move the suggestion keeps a hand-picked year; one that does, sets it
+    await flow('R3.1 birth month and a hand-picked year', async () => {
+      const Rec = require('../js/records.js'), y = new Date().getFullYear();
+      const edit = async (page, month) => {
+        await page.click('#profileBtn');
+        await page.locator('#profileList .icon-btn').first().click();
+        await page.fill('.profile-edit input[type=month]', month);
+        await page.click('.profile-edit button[type=submit]');
+        await page.click('#profileClose');
+      };
+      // Hermes's case: school year 8 entered this year (it wins over the birth month), Home picked by hand: Year 10
+      {
+        const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ann', schoolYear: 8, schoolYearSet: y }], active: 'p1' });
+        const { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 10, suggested: 8 }) });
+        check('R3.1 Home starts on the hand-picked Year 10', (await page.inputValue('#yearSel')) === '10', await page.inputValue('#yearSel'));
+        await edit(page, '2015-03');
+        check('R3.1 a birth month that does not move the suggestion keeps Year 10', (await page.inputValue('#yearSel')) === '10', await page.inputValue('#yearSel'));
+        await context.close();
+      }
+      // no school year: the birth month is what the suggestion comes from, so a new birth month that moves it sets the year
+      {
+        const from = Rec.suggestYear({ dob: '2016-03' }, new Date()), to = Rec.suggestYear({ dob: '2014-03' }, new Date());
+        const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ben', dob: '2016-03' }], active: 'p1' });
+        const { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 10, suggested: from }) });
+        await edit(page, '2014-03');
+        check('R3.1 a birth month that moves the suggestion sets the year', (await page.inputValue('#yearSel')) === String(to), (await page.inputValue('#yearSel')) + ' want ' + to);
+        await context.close();
+      }
+    });
+
     // R2.2-R2.5 (v1.7.0): rows typed in a spreadsheet, names the app does not know, skipped rows said, no Clear on an empty screen
     await flow('R2 import and Progress', async () => {
       const os = require('os'), fs = require('fs'), path = require('path'), Rec = require('../js/records.js');

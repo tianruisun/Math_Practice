@@ -1192,12 +1192,16 @@
     f.addEventListener('submit', e => {
       e.preventDefault();
       const y = +yr.value || null, d = /^\d{4}-\d{2}$/.test(dob.value) ? dob.value : '';
-      // the year on Home is set again only when what the suggestion comes from changed; a name edit keeps a
-      // hand-picked year (R2.1, v1.7.0)
+      // The year on Home is set again only when the details changed AND that moved the suggested year. A name edit
+      // (R2.1), or a birth month that does not change the suggestion (e.g. a school year is also set, which wins),
+      // keeps a year picked by hand (R3.1, v1.7.0).
       const changed = yr.value !== shownYear || d !== (pr.dob || '');
       Profiles.update(pr.id, { name: name.value.trim().slice(0, 20), schoolYear: y, schoolYearSet: y ? thisYear : null, dob: d });
       editingProfile = null;
-      if (pr === Profiles.active) applySuggestedYear(changed);
+      if (pr === Profiles.active) {
+        const moved = Records.suggestYear(pr, new Date()) !== S.settings.suggested;
+        applySuggestedYear(changed && moved);
+      }
       renderProfiles(); render();
       toast(t('parent.saved'));
     });
