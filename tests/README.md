@@ -15,7 +15,7 @@ Each run prints a count per suite and exits non-zero if anything failed.
 | unit | `run.js` | answer checker; every generated question accepts its own answer; AI parsing; competition papers |
 | kit | `kit.js` | the test kit: `serve.js` finds files with the folder written five ways, `../` cannot leave the folder, a folder with no `index.html` is refused |
 | smoke | `smoke.js` | page loads with no console errors; fits a 375px phone; TEST badge shows `TEST v<version>` off Production and is absent on Production; offline cache is named after `version.js` |
-| flows | `flows.js` | a practice set to results; worked method needs the parent PIN; parent PIN opens Parent settings; "Forgot PIN" erases the app's data; old `mp.` keys move to `sp.`; language switch keeps a typed answer; arrow keys in multiple choice; 44 px Get started |
+| flows | `flows.js` | a practice set to results; worked method needs the parent PIN and opens right after it; parent PIN opens Parent settings; "Forgot PIN" erases the app's data; old `mp.` keys move to `sp.` once, only this app's names, never deleting the only copy; a refused save shows one message and the app keeps working; language switch keeps a typed answer; arrow keys in multiple choice; 44 px Get started |
 
 Screenshots go to `<system temp>/Student_Practice-tests/`, never into the repo.
 `serve.js` is a tiny static server for local runs. It accepts a folder written any way (`D:/x`, `D:\x`, relative) and stops at once

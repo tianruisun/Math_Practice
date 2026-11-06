@@ -5,18 +5,21 @@ const { launch } = require('./smoke.js');
 const SETTINGS = 'sp.settings.p1';
 const PIN = '2468';
 
-async function freshPage(browser, site, seed) {
+/* initScript: code run in the page before the app (e.g. to make storage fail). */
+async function freshPage(browser, site, seed, initScript) {
   const context = await browser.newContext({ viewport: { width: 375, height: 812 } });
   context.setDefaultTimeout(20000);   // no single step may wait longer than 20 s
+  if (initScript) await context.addInitScript(initScript);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', e => errors.push(e.message));
   page.on('dialog', d => d.accept());   // confirm() dialogs: finish with unanswered questions, reset PIN
-  await page.goto(site, { waitUntil: 'load' });
   if (seed) {
+    // seed before the app first runs, as an earlier version would have left it: open a plain file on the same site first
+    await page.goto(site + 'version.js');
     await page.evaluate(s => { for (const [k, v] of Object.entries(s)) localStorage.setItem(k, v); }, seed);
-    await page.reload({ waitUntil: 'load' });
   }
+  await page.goto(site, { waitUntil: 'load' });
   return { context, page, errors };
 }
 
@@ -52,10 +55,11 @@ async function run(site) {
       check('F.8 method asks for the parent PIN', await page.locator('#pinDialog').evaluate(d => d.open));
       await page.click('#pinCancel');
       check('F.8 method stays closed without the PIN', !(await page.locator('#resList details.method').first().evaluate(d => d.open)));
-      await page.locator('#resList details.method summary').first().click();
+      await page.locator('#resList details.method summary').nth(1).click();
       await typePin(page);
-      await page.locator('#resList details.method summary').first().click();
-      check('F.8 method opens after the PIN', await page.locator('#resList details.method').first().evaluate(d => d.open));
+      // R1.2: the method the parent tapped opens right after the PIN, without tapping again (second item: not just the first)
+      check('R1.2 tapped method opens after the PIN', await page.locator('#resList details.method').nth(1).evaluate(d => d.open));
+      check('R1.2 only that method opens', !(await page.locator('#resList details.method').first().evaluate(d => d.open)));
       check('practice: no page errors', errors.length === 0, errors.join(' | '));
       await context.close();
     });
@@ -87,12 +91,40 @@ async function run(site) {
 
     // 4. F.2: keys from v1.6.3 ("mp.") move to "sp." once; the saved language still applies.
     await flow('F.2 old keys', async () => {
-      const { context, page } = await freshPage(browser, site, { 'mp.lang': 'zh', 'mp.settings.p1': settings({ year: 3 }) });
-      const keys = await page.evaluate(() => Object.keys(localStorage));
-      check('F.2 no "mp." keys left', !keys.some(k => k.startsWith('mp.')), keys.join(','));
-      check('F.2 settings moved to "sp."', keys.includes('sp.settings.p1') && keys.includes('sp.lang'), keys.join(','));
+      const { context, page } = await freshPage(browser, site, {
+        'mp.lang': 'zh', 'mp.settings.p1': settings({ year: 3 }),
+        'mp.history.p1': '[{"n":5,"correct":5,"old":true}]', 'sp.history.p1': '[{"n":5,"correct":1,"new":true}]',
+        'mp.other-app': 'not ours'
+      });
+      const store = await page.evaluate(() => Object.assign({}, localStorage));
+      check('F.2 settings and language moved to "sp."', store['sp.settings.p1'] && store['sp.lang'] === 'zh' && !store['mp.settings.p1'] && !store['mp.lang'], Object.keys(store).join(','));
       check('F.2 moved language applies (Chinese)', (await page.evaluate(() => document.documentElement.lang)) === 'zh-CN');
       check('F.6 bottom navigation is named in Chinese', (await page.getAttribute('nav.bottom-nav', 'aria-label')) === '主导航');
+      check('R1.1 when both exist, both are kept', /"new"/.test(store['sp.history.p1']) && /"old"/.test(store['mp.history.p1'] || ''), Object.keys(store).join(','));
+      check('R1.1 another app\'s "mp." key is left alone', store['mp.other-app'] === 'not ours');
+      // R1.1: the move happens once; an old key written later (e.g. by a v1.6.3 tab still open) is not moved or deleted
+      await page.evaluate(() => localStorage.setItem('mp.badges.p1', '["late"]'));
+      await page.reload({ waitUntil: 'load' });
+      const later = await page.evaluate(() => [localStorage.getItem('mp.badges.p1'), localStorage.getItem('sp.badges.p1')]);
+      check('R1.1 the move runs once only', later[0] === '["late"]' && later[1] === null, JSON.stringify(later));
+      await context.close();
+    });
+
+    // R1.3 (F.9): when the browser refuses every save, the app keeps working and says so once, not on every save.
+    await flow('R1.3 storage full', async () => {
+      const failing = () => { Storage.prototype.setItem = function () { throw new DOMException('quota', 'QuotaExceededError'); }; };
+      const toastText = () => page.evaluate(() => { const b = document.querySelector('#toast'); return b.hidden ? '' : b.textContent; });
+      const { context, page, errors } = await freshPage(browser, site, null, failing);
+      await page.waitForTimeout(300);
+      // the first failed save happens while the app starts (the student profile), so the message is there at once
+      check('R1.3 "not saving" message appears', /not saving progress/.test(await toastText()), await toastText());
+      await page.evaluate(() => { const b = document.querySelector('#toast'); b.hidden = true; b.textContent = ''; });
+      await page.click('#startBtn');
+      await page.click('#finishBtn');                 // saving the session fails again
+      check('R1.3 results still appear when saving fails', await visible(page, '#screen-results'));
+      await page.waitForTimeout(300);
+      check('R1.3 the message is not repeated on later saves', !/not saving progress/.test(await toastText()), await toastText());
+      check('R1.3 no page errors', errors.length === 0, errors.join(' | '));
       await context.close();
     });
 

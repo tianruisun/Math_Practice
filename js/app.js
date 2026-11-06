@@ -12,15 +12,20 @@
   /* ---------- storage (every access guarded: private mode etc.) ---------- */
   /* Keys start with "sp." (Student_Practice). The GitHub Pages address shares its origin, and so its localStorage, with
      other apps, so the prefix is the app's own name. Up to v1.6.3 the prefix was "mp.": move those keys once. */
+  // Only the names this app used: another app on the same origin may have its own "mp." keys.
+  const OLD_KEY = /^mp\.(?:(?:settings|history|badges)(?:\.p\d+)?|pin|ai|profiles|methods|lang)$/;
   (function moveOldKeys() {
     try {
+      if (localStorage.getItem('sp.moved') !== null) return;   // once per browser, not on every load
       // list the keys first: removing one while walking by index can reorder the rest and skip a key
       for (const k of Object.keys(localStorage)) {
-        if (!k.startsWith('mp.')) continue;
+        if (!OLD_KEY.test(k)) continue;
         const nk = 'sp.' + k.slice(3);
-        if (localStorage.getItem(nk) === null) localStorage.setItem(nk, localStorage.getItem(k));
+        if (localStorage.getItem(nk) !== null) continue;      // both exist: keep both, never delete the only copy of either
+        localStorage.setItem(nk, localStorage.getItem(k));
         localStorage.removeItem(k);
       }
+      localStorage.setItem('sp.moved', '1');
     } catch (e) { /* storage blocked: nothing to move */ }
   })();
   try { localStorage.removeItem('sp.methods'); } catch (e) { /* ignore */ }
@@ -801,7 +806,13 @@
     sum.addEventListener('click', async e => {
       if (d.open || methodsOpen()) return;
       e.preventDefault();                       // students need the parent PIN to open a method
-      if (await unlockParent()) toast(t('rev.methodUnlocked'));
+      // unlocking re-renders the review, so remember which method this was and open its new copy
+      const pos = [...document.querySelectorAll('details.method')].indexOf(d);
+      if (await unlockParent()) {
+        const again = document.querySelectorAll('details.method')[pos];
+        if (again) again.open = true;
+        toast(t('rev.methodUnlocked'));
+      }
     });
     d.append(sum);
     if (!sol) d.append(el('p', 'muted small', t('rev.noMethod')));
@@ -996,11 +1007,12 @@
     });
   }
 
-  /* Every key this app stores, except the language choice. */
+  /* Every key this app stores, old "mp." names included, except the language choice and the "moved" flag
+     (without the flag a later load would move leftover old keys back in). */
   function eraseAll() {
     try {
       for (const k of Object.keys(localStorage)) {
-        if (k.startsWith('sp.') && k !== 'sp.lang') localStorage.removeItem(k);
+        if ((k.startsWith('sp.') && k !== 'sp.lang' && k !== 'sp.moved') || OLD_KEY.test(k)) localStorage.removeItem(k);
       }
     } catch (e) { /* storage blocked: nothing stored */ }
   }
