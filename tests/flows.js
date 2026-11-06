@@ -165,6 +165,114 @@ async function run(site) {
       check('F.13 Get started button is at least 44 px tall', h >= 44, h);
       await context.close();
     });
+
+    // v1.7.0: the answer hint sits behind an info icon: hidden until hover, focus or tap
+    await flow('v1.7 info tip', async () => {
+      const { context, page } = await freshPage(browser, site, { [SETTINGS]: settings() });
+      await page.click('#startBtn');
+      const wrap = page.locator('#qList .info').first(), tip = wrap.locator('.tip');
+      check('v1.7 hint is not shown as a line of text', !(await page.locator('#qList p').filter({ hasText: 'Fractions like' }).count()));
+      check('v1.7 hint hidden until asked', (await tip.evaluate(e => getComputedStyle(e).visibility)) === 'hidden');
+      await wrap.locator('.info-btn').hover();
+      check('v1.7 hint shows on hover', (await tip.evaluate(e => getComputedStyle(e).visibility)) === 'visible');
+      check('v1.7 hint text', /3\/4/.test(await tip.textContent()), await tip.textContent());
+      await page.mouse.move(5, 5);
+      await wrap.locator('.info-btn').click();
+      check('v1.7 hint shows on tap', (await wrap.getAttribute('class')).includes('open') && (await tip.evaluate(e => getComputedStyle(e).visibility)) === 'visible');
+      const box = await tip.boundingBox();
+      check('v1.7 hint stays on a 375 px screen', box && box.x >= 0 && box.x + box.width <= 375, JSON.stringify(box));
+      await context.close();
+    });
+
+    // v1.7.0: a fast, all-correct, first-try set earns Perfect, First try and Speed at its own level
+    await flow('v1.7 badges earned', async () => {
+      const { context, page } = await freshPage(browser, site, { [SETTINGS]: settings({ year: 4, diff: 1 }) });
+      await page.click('#startBtn');
+      const answers = await page.evaluate(() => (window.__testAnswers ? window.__testAnswers() : null));
+      if (!answers) { console.log('  (flows: badge flow skipped: no test hook on a Production host)'); await context.close(); return; }
+      for (let i = 0; i < answers.length; i++) {
+        const a = answers[i], card = page.locator('#qc' + i);
+        if (a.type === 'mc') { await card.locator('.choice').nth(a.correct).click(); await page.locator('#qc' + i + ' button.btn.primary').click(); }
+        else { await page.fill('#ans' + i, String(a.answer)); await page.press('#ans' + i, 'Enter'); }
+      }
+      await page.click('#finishBtn');
+      const text = await page.textContent('#resBadgeText');
+      check('v1.7 results show all three new badges', /Perfect/.test(text) && /First try/.test(text) && /Speed/.test(text), text);
+      check('v1.7 results name the level', /Year 4/.test(text) && /Core/.test(text), text);
+      await page.click('.tab[data-go="progress"]');
+      const row = await page.locator('.badge-grid tr').nth(1).locator('td').evaluateAll(tds => tds.map(td => td.className));
+      check('v1.7 Year 4 Core row has all three badges', row.join() === 'got,got,got', row.join());
+      const other = await page.locator('.badge-grid tr').nth(2).locator('td.got').count();
+      check('v1.7 other difficulties stay empty', other === 0, other);
+      await context.close();
+    });
+
+    // v1.7.0: student details choose the year on Home
+    await flow('v1.7 student details', async () => {
+      const Rec = require('../js/records.js');
+      const { context, page } = await freshPage(browser, site, { [SETTINGS]: settings({ year: 9 }) });
+      await page.click('#profileBtn');
+      await page.locator('#profileList .icon-btn').first().click();
+      await page.selectOption('.profile-edit select', '5');
+      await page.click('.profile-edit button[type=submit]');
+      await page.click('#profileClose');
+      check('v1.7 school year chooses the year on Home', (await page.inputValue('#yearSel')) === '5', await page.inputValue('#yearSel'));
+      // a new student: the details open straight away; a birth month alone also chooses the year
+      await page.click('#profileBtn');
+      await page.fill('#profileNew', 'Kid');
+      await page.click('#profileAddBtn');
+      check('v1.7 details open for a new student', (await page.locator('.profile-edit').count()) === 1);
+      await page.fill('.profile-edit input[type=month]', '2016-08');
+      await page.click('.profile-edit button[type=submit]');
+      await page.click('#profileClose');
+      const want = String(Rec.suggestYear({ dob: '2016-08' }, new Date()));
+      check('v1.7 birth month chooses the year on Home', (await page.inputValue('#yearSel')) === want, (await page.inputValue('#yearSel')) + ' want ' + want);
+      await context.close();
+    });
+
+    // v1.7.0: export a student's progress to CSV, import it into another student; a wrong file is refused
+    await flow('v1.7 CSV', async () => {
+      const os = require('os'), fs = require('fs'), path = require('path');
+      const t0 = Date.parse('2026-10-01T10:00:00Z');
+      const { context, page } = await freshPage(browser, site, {
+        'sp.profiles': JSON.stringify({ list: [{ id: 'p1', name: 'Ann', schoolYear: 4, schoolYearSet: new Date().getFullYear(), dob: '2016-03' }], active: 'p1' }),
+        'sp.history.p1': JSON.stringify([
+          { date: t0, subject: 'maths', year: 4, topic: 'frac', diff: 2, n: 5, correct: 5, stars: 3, byTopic: { frac: [5, 5] }, wrong: [] },
+          { date: t0 + 864e5, subject: 'maths', year: 4, topic: 'dec', diff: 2, n: 5, correct: 3, stars: 1, byTopic: { dec: [3, 5] }, wrong: [] }]),
+        'sp.badges.p1': JSON.stringify([{ date: t0, kind: 'perfect', subject: 'maths', year: 4, diff: 2, n: 5 }, { date: t0, kind: 'firstTry', subject: 'maths', year: 4, diff: 2, n: 5 }])
+      });
+      await page.click('#parentBtn');
+      await typePin(page);
+      const [dl] = await Promise.all([page.waitForEvent('download'), page.click('#csvExport')]);
+      const file = path.join(os.tmpdir(), 'Student_Practice-tests', 'progress.csv');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      await dl.saveAs(file);
+      const lines = fs.readFileSync(file, 'utf8').replace(/^﻿/, '').trim().split(/\r\n/);
+      check('v1.7 export: header, student, 2 sessions, 2 badges', lines.length === 6 && lines[0].startsWith('record,date,name') && lines.filter(l => l.startsWith('session,')).length === 2, lines.length);
+      check('v1.7 export file name names the student', /^student-practice_Ann_\d{4}-\d{2}-\d{2}\.csv$/.test(dl.suggestedFilename()), dl.suggestedFilename());
+      // a second student, then import Ann's file into it
+      await page.click('#profileBtn');
+      await page.fill('#profileNew', 'Copy');
+      await page.click('#profileAddBtn');
+      await page.locator('.profile-edit .btn.ghost').click();
+      await page.click('#profileClose');
+      await page.click('#parentBtn');
+      await page.setInputFiles('#csvImport', file);
+      await page.waitForTimeout(300);
+      const p2 = await page.evaluate(() => ({ h: JSON.parse(localStorage.getItem('sp.history.p2') || '[]').length, b: JSON.parse(localStorage.getItem('sp.badges.p2') || '[]').length, pr: JSON.parse(localStorage.getItem('sp.profiles')).list.find(x => x.id === 'p2') }));
+      check('v1.7 import adds the sessions and badges', p2.h === 2 && p2.b === 2, JSON.stringify(p2));
+      check('v1.7 import fills missing details, keeps the name', p2.pr.name === 'Copy' && p2.pr.schoolYear === 4 && p2.pr.dob === '2016-03', JSON.stringify(p2.pr));
+      await page.setInputFiles('#csvImport', file);   // the same file again adds nothing
+      await page.waitForTimeout(300);
+      const again = await page.evaluate(() => JSON.parse(localStorage.getItem('sp.history.p2')).length);
+      check('v1.7 importing twice adds no duplicates', again === 2, again);
+      const bad = path.join(path.dirname(file), 'not-progress.csv');
+      fs.writeFileSync(bad, 'name,score\nA,1\n');
+      await page.setInputFiles('#csvImport', bad);
+      await page.waitForTimeout(300);
+      check('v1.7 a wrong file is refused with a message', /not a Student Practice progress file/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+      await context.close();
+    });
   } finally {
     await browser.close();
   }

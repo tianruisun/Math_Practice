@@ -137,7 +137,7 @@
     </section>
 
     <!-- QUIZ: question cards; one at a time or in pages -->
-    <section id="screen-quiz" class="screen" hidden data-i18n-aria="quiz.label" aria-label="Quiz">
+    <section id="screen-quiz" class="screen" hidden data-i18n-aria="quiz.region" aria-label="Quiz">
       <div class="quiz-top">
         <div class="quiz-head">
           <p id="qProgress" class="qprogress"></p>
@@ -182,8 +182,8 @@
         <p id="resMsg"></p>
         <p id="resTime" class="muted small" hidden></p>
         <div id="resBadge" class="res-badge" hidden>
-          <span class="res-medal" aria-hidden="true">🏅</span>
-          <span><b data-i18n="badge.goodJob">Good job!</b><br><span id="resBadgeText"></span></span>
+          <span id="resBadgeIcons" class="res-medal" aria-hidden="true">🏅</span>
+          <span><b data-i18n="badge.goodJob">New badge!</b><br><span id="resBadgeText"></span></span>
         </div>
       </div>
       <div id="resCats" class="res-cats" hidden></div>
@@ -238,6 +238,15 @@
         <div class="row">
           <button type="button" id="promptReset" class="btn secondary" data-i18n="parent.promptReset">Reset to default</button>
           <button type="button" id="promptSave" class="btn primary" data-i18n="parent.promptSave">Save prompt</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 class="badge-head"><span data-i18n="csv.heading">Progress file</span><span id="csvInfo"></span></h3>
+        <div class="row">
+          <button type="button" id="csvExport" class="btn secondary" data-i18n="csv.export">Export CSV</button>
+          <button type="button" id="csvImportBtn" class="btn secondary" data-i18n="csv.import">Import CSV</button>
+          <input type="file" id="csvImport" accept=".csv,text/csv" hidden>
         </div>
       </div>
 
@@ -317,6 +326,7 @@
   <script src="js/gen-selective.js"></script>
   <script src="./js/gen-comp.js"></script>
   <script src="./js/similar.js"></script>
+  <script src="./js/records.js"></script>
   <script src="./js/ai.js"></script>
   <script src="./js/app.js"></script>
 </body>

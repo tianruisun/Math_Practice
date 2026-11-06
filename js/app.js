@@ -66,7 +66,8 @@
       badgeKey() { return K.badges + '.' + P.active; },
       select(id) { P.active = id; store.set(K.profiles, P); },
       add(name) { if (P.list.length >= MAX_PROFILES) return null; let n = 1; while (P.list.some(x => x.id === 'p' + n)) n++; const pr = { id: 'p' + n, name }; P.list.push(pr); P.active = pr.id; store.set(K.profiles, P); return pr; },
-      rename(id, name) { const pr = P.list.find(x => x.id === id); if (pr) { pr.name = name; store.set(K.profiles, P); } },
+      // fields: name, schoolYear (1–12), schoolYearSet (calendar year it was entered), dob ('YYYY-MM')
+      update(id, fields) { const pr = P.list.find(x => x.id === id); if (pr) { Object.assign(pr, fields); store.set(K.profiles, P); } },
       remove(id) { if (P.list.length <= 1) return false; P.list = P.list.filter(x => x.id !== id); store.del(K.history + '.' + id); store.del(K.settings + '.' + id); store.del(K.badges + '.' + id); if (P.active === id) P.active = P.list[0].id; store.set(K.profiles, P); return true; }
     };
   })();
@@ -290,7 +291,7 @@
       toast(t('quiz.toppedUp', { n: fromTopic, topic: t('topic.' + topic) }), 7000);
     }
     S.quiz = {
-      exam: false, questions, i: 0, page: 0, results: [],
+      exam: false, questions, i: 0, page: 0, results: [], started: Date.now(),
       st: questions.map(() => ({ status: 'answering', tries: 0, given: [], sel: null, fbKey: '', draft: '' })),
       settings: Object.assign({ subject }, settings)
     };
@@ -306,7 +307,7 @@
     const settings = { subject: 'review', topic: 'similar', year: first.q.year || fb.year || S.settings.year, diff: first.q.diff || fb.diff || S.settings.diff, count: questions.length };
     S.lastQuizSettings = { similar: items, perQ };
     S.quiz = {
-      exam: false, questions, i: 0, page: 0, results: [],
+      exam: false, questions, i: 0, page: 0, results: [], started: Date.now(),
       st: questions.map(() => ({ status: 'answering', tries: 0, given: [], sel: null, fbKey: '', draft: '' })),
       settings
     };
@@ -444,6 +445,7 @@
     } else {
       const form = el('form', 'answer-form'); form.noValidate = true; form.autocomplete = 'off';
       const lab = el('label', 'label', t('quiz.label')); lab.htmlFor = 'ans' + i;
+      lab.append(infoTip(t(Q.exam && q.intAnswer ? 'comp.intHint' : 'quiz.hint'), t('quiz.hintLabel')));
       const inp = el('input', 'answer'); inp.id = 'ans' + i; inp.type = 'text';
       Object.assign(inp, {
         inputMode: q.intAnswer ? 'numeric' : 'text', autocomplete: 'off', spellcheck: false, placeholder: t(q.intAnswer ? 'comp.placeholder' : 'quiz.placeholder'),
@@ -457,9 +459,7 @@
         renderChrome();
       });
       form.append(lab, inp);
-      if (Q.exam) form.append(el('p', 'muted small', t(q.intAnswer ? 'comp.intHint' : 'quiz.hint')));
-      else if (!done) {
-        form.append(el('p', 'muted small', t('quiz.hint')));
+      if (!Q.exam && !done) {
         const chk = el('button', 'btn primary', t('quiz.check')); chk.type = 'submit';
         form.append(chk);
       }
@@ -741,14 +741,39 @@
     return row;
   }
 
+  /* What a finished set means for badges: its level, score, first-try answers and time. */
+  function sessionFacts(Q) {
+    const st = Q.settings, R = Q.results;
+    return {
+      subject: st.subject, year: st.year, diff: st.diff, n: Q.questions.length,
+      paper: Q.exam ? (st.subject === 'comp' ? 'comp:' + compPaper(st) + ':' + compLen(st) : 'sel:' + (st.selLen || 'full')) : undefined,
+      correct: R.filter(r => r && r.ok).length,
+      firstTry: R.filter(r => r && r.ok && r.tries === 1).length,
+      seconds: Q.exam ? (Q.timeUsed || 0) / 1000 : (Date.now() - (Q.started || Date.now())) / 1000
+    };
+  }
+  const KIND_ICON = { perfect: '🏅', firstTry: '🎯', speed: '⚡' };
+  const kindLabel = k => KIND_ICON[k] + ' ' + t('badge.kind.' + k);
+  function levelLabel(lv) {
+    if (lv === 'earlier') return t('badge.earlier');
+    const p = lv.split(':');
+    if (p[0] === 'paper') return p[1] === 'comp' ? t('topic.' + p[2]) + ' · ' + t('comp.len.' + p[3]) : t('subject.sel') + ' · ' + t('sel.len.' + p[2]);
+    return [t('subject.' + p[0]), yearLabel(+p[1]), t('diff.short.' + p[2])].join(' · ');
+  }
+
   /* ---------- history ---------- */
   function saveSession() {
     const Q = S.quiz;
     Q.stars = starsFor(Q.results.filter(r => r && r.ok).length, Q.questions.length);
-    if (Q.stars === 3 && !Q.badgeGiven) {
-      const b = store.get(Profiles.badgeKey(), []) || [];
-      b.push({ date: Date.now(), subject: Q.settings.subject, topic: Q.settings.topic, n: Q.questions.length });
-      store.set(Profiles.badgeKey(), b.slice(-500));
+    if (!Q.badgeGiven) {
+      const f = sessionFacts(Q), date = Date.now();
+      Q.awards = Records.awardsFor(f);
+      Q.awardLevel = Records.levelOf(f);
+      if (Q.awards.length) {
+        const b = store.get(Profiles.badgeKey(), []) || [];
+        Q.awards.forEach(kind => b.push({ date, kind, subject: f.subject, year: f.year, diff: f.diff, paper: f.paper, topic: Q.settings.topic, n: f.n }));
+        store.set(Profiles.badgeKey(), b.slice(-500));
+      }
       Q.badgeGiven = true;
     }
     const byTopic = {};
@@ -777,9 +802,12 @@
     const k = starsFor(c, n), sb = $('#resStars');
     sb.innerHTML = ''; sb.append(starRow(k, true));
     $('#resMsg').textContent = (Q.maxMarks ? t('comp.marksScore', { m: Q.marks, total: Q.maxMarks }) + ' ' : '') + t('stars.msg' + k);
-    const badge = $('#resBadge');
-    badge.hidden = k !== 3;
-    if (k === 3) $('#resBadgeText').textContent = t('badge.added', { name: Profiles.name(Profiles.active), n: badgeCount() });
+    const awards = Q.awards || [], badge = $('#resBadge');
+    badge.hidden = !awards.length;
+    if (awards.length) {
+      $('#resBadgeIcons').textContent = awards.map(k => KIND_ICON[k]).join('');
+      $('#resBadgeText').textContent = t('badge.added', { name: Profiles.name(Profiles.active), list: awards.map(k => t('badge.kind.' + k)).join(' · '), level: levelLabel(Q.awardLevel) });
+    }
     renderExamSummary(Q);
     $('#resLocked').hidden = S.parent;
     $('#unlockBtn').hidden = S.parent;
@@ -895,12 +923,7 @@
       const d = el('div', 'stat'); d.append(el('b', '', String(v)), el('span', '', t(k))); stats.append(d);
     });
     box.append(stats);
-    const nb = badgeCount(), shelf = el('div', 'badge-shelf');
-    const medal = el('div', 'medal' + (nb ? '' : ' empty'), '🏅');
-    const txt = el('div', 'shelf-text');
-    txt.append(el('b', '', t('badge.title')), el('span', '', nb ? t('badge.count', { n: nb }) : t('badge.none')));
-    shelf.append(medal, txt);
-    box.append(shelf);
+    renderBadges(box);
 
     const by = {};
     h.forEach(x => { for (const k in x.byTopic) { const b = by[k] = by[k] || [0, 0]; b[0] += x.byTopic[k][0]; b[1] += x.byTopic[k][1]; } });
@@ -941,6 +964,70 @@
     wrap.append(btn);
     if (!S.parent) wrap.append(el('p', 'muted small center', t('prog.clearNote')));
     box.append(wrap);
+  }
+
+  /* Badges: a grid for the year being practised (difficulty × kind), then every other level collected. */
+  function renderBadges(box) {
+    const list = store.get(Profiles.badgeKey(), []) || [], col = Records.collection(list);
+    const shelf = el('section', 'badge-shelf');
+    const head = el('div', 'badge-head');
+    head.append(el('h3', '', t('badge.title', { n: list.length })),
+      infoTip(t('badge.how', { s1: Records.SPEED_SECONDS[1], s2: Records.SPEED_SECONDS[2], s3: Records.SPEED_SECONDS[3], s4: Records.SPEED_SECONDS[4], n: Records.MIN_QUESTIONS }), t('badge.howLabel')));
+    shelf.append(head);
+    const subject = S.settings.subject === 'ga' ? 'ga' : 'maths', year = S.settings.year;
+    const table = el('table', 'badge-grid');
+    table.append(el('caption', '', t('subject.' + subject) + ' · ' + yearLabel(year)));
+    const hr = el('tr'); hr.append(el('th', 'corner'));
+    Records.KINDS.forEach(k => { const th = el('th', '', KIND_ICON[k]); th.scope = 'col'; th.title = t('badge.kind.' + k); th.setAttribute('aria-label', t('badge.kind.' + k)); hr.append(th); });
+    table.append(hr);
+    const shown = new Set();
+    [1, 2, 3, 4].forEach(d => {
+      const lv = [subject, year, d].join(':'), got = col[lv] || {}, tr = el('tr');
+      shown.add(lv);
+      const th = el('th', '', t('diff.short.' + d)); th.scope = 'row'; tr.append(th);
+      Records.KINDS.forEach(k => {
+        const n = got[k] || 0, td = el('td', n ? 'got' : 'empty', n ? KIND_ICON[k] + (n > 1 ? '×' + n : '') : KIND_ICON[k]);
+        td.setAttribute('aria-label', t('badge.kind.' + k) + ': ' + n);
+        tr.append(td);
+      });
+      table.append(tr);
+    });
+    shelf.append(table);
+    const others = Object.keys(col).filter(lv => !shown.has(lv)).sort();
+    if (others.length) {
+      shelf.append(el('h4', '', t('badge.other')));
+      const ul = el('ul', 'plain badge-others');
+      others.forEach(lv => ul.append(el('li', '', levelLabel(lv) + '  ' + Records.KINDS.filter(k => col[lv][k]).map(k => KIND_ICON[k] + '×' + col[lv][k]).join(' '))));
+      shelf.append(ul);
+    }
+    box.append(shelf);
+  }
+
+  /* An info icon whose text shows on hover, on keyboard focus, or when tapped (phones have no hover). */
+  let tipSeq = 0;
+  function infoTip(text, label) {
+    const wrap = el('span', 'info'), id = 'tip' + (++tipSeq);
+    const btn = el('button', 'info-btn'); btn.type = 'button';
+    btn.setAttribute('aria-label', label); btn.setAttribute('aria-describedby', id); btn.setAttribute('aria-expanded', 'false');
+    btn.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M12 10.8v6.2M12 7.3v.2"/></svg>';
+    const tip = el('span', 'tip', text); tip.id = id; tip.setAttribute('role', 'tooltip');
+    const place = () => {
+      tip.style.left = '';
+      const r = tip.getBoundingClientRect(), pad = 8;
+      let dx = 0;
+      if (r.right > innerWidth - pad) dx = innerWidth - pad - r.right;
+      if (r.left + dx < pad) dx = pad - r.left;
+      if (dx) tip.style.left = (parseFloat(getComputedStyle(tip).left) + dx) + 'px';
+    };
+    const show = on => { if (on) place(); wrap.classList.toggle('open', on); btn.setAttribute('aria-expanded', String(on)); };
+    wrap.addEventListener('mouseenter', place);
+    btn.addEventListener('focus', place);
+    // inside a <label>, a click would also move focus to the input: keep the click to the icon
+    btn.addEventListener('click', e => { e.preventDefault(); e.stopPropagation(); show(!wrap.classList.contains('open')); });
+    btn.addEventListener('keydown', e => { if (e.key === 'Escape') show(false); });
+    btn.addEventListener('blur', () => show(false));
+    wrap.append(btn, tip);
+    return wrap;
   }
 
   /* ---------- PARENT: PIN ---------- */
@@ -1026,6 +1113,7 @@
   /* ---------- PARENT: settings ---------- */
   let draftProvider = null;
   function renderParent() {
+    $('#csvInfo').replaceChildren(infoTip(t('csv.note'), t('csv.heading')));
     renderPrompt();
     const cfg = store.get(K.ai, { provider: 'local', key: '', model: '' });
     if (draftProvider === null) draftProvider = cfg.provider || 'local';
@@ -1064,6 +1152,41 @@
   }
 
   /* ---------- student profiles dialog ---------- */
+  let editingProfile = null;
+  /* Name, school year and birth month. The school year moves up by itself each calendar year. */
+  function profileEditor(pr) {
+    const f = el('form', 'profile-edit'), now = new Date(), thisYear = now.getFullYear();
+    const field = (key, input) => { const l = el('label', 'field'); l.append(el('span', '', t(key)), input); f.append(l); return input; };
+    const name = field('profile.name', el('input')); name.type = 'text'; name.maxLength = 20; name.value = pr.name || ''; name.placeholder = Profiles.name(pr); name.autocomplete = 'off';
+    const yr = field('profile.schoolYear', el('select'));
+    yr.append(new Option(t('profile.yearUnset'), ''));
+    for (let y = 1; y <= 12; y++) yr.append(new Option(yearLabel(y), String(y)));
+    yr.value = pr.schoolYear ? String(Records.suggestYear({ schoolYear: pr.schoolYear, schoolYearSet: pr.schoolYearSet }, now)) : '';
+    const dob = field('profile.dob', el('input')); dob.type = 'month'; dob.value = pr.dob || '';
+    dob.min = (thisYear - 25) + '-01'; dob.max = thisYear + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    const row = el('div', 'row');
+    const cancel = el('button', 'btn ghost', t('pin.cancel')); cancel.type = 'button';
+    cancel.addEventListener('click', () => { editingProfile = null; renderProfiles(); });
+    const save = el('button', 'btn primary', t('profile.save')); save.type = 'submit';
+    row.append(cancel, save); f.append(row);
+    f.addEventListener('submit', e => {
+      e.preventDefault();
+      const y = +yr.value || null, d = /^\d{4}-\d{2}$/.test(dob.value) ? dob.value : '';
+      Profiles.update(pr.id, { name: name.value.trim().slice(0, 20), schoolYear: y, schoolYearSet: y ? thisYear : null, dob: d });
+      editingProfile = null;
+      if (pr === Profiles.active) applySuggestedYear(true);
+      renderProfiles(); render();
+      toast(t('parent.saved'));
+    });
+    return f;
+  }
+  /* Choose the year the student most likely practises, when it changes (details edited, a new school year).
+     A year picked by hand on Home stays until then. */
+  function applySuggestedYear(force) {
+    const y = Records.suggestYear(Profiles.active, new Date());
+    if (!y || (!force && S.settings.suggested === y)) return;
+    S.settings.year = y; S.settings.suggested = y; saveSettings();
+  }
   function renderProfiles() {
     const ul = $('#profileList'); ul.innerHTML = '';
     Profiles.list.forEach(pr => {
@@ -1071,8 +1194,11 @@
       const pick = el('button', 'profile-pick', (cur ? '✓ ' : '') + Profiles.name(pr)); pick.type = 'button';
       if (cur) pick.setAttribute('aria-current', 'true');
       pick.addEventListener('click', () => switchProfile(pr.id));
-      const ren = el('button', 'icon-btn', '✎'); ren.type = 'button'; ren.setAttribute('aria-label', t('profile.rename'));
-      ren.addEventListener('click', () => { const v = prompt(t('profile.renamePrompt'), Profiles.name(pr)); if (v && v.trim()) { Profiles.rename(pr.id, v.trim().slice(0, 20)); renderProfiles(); render(); } });
+      const sug = Records.suggestYear(pr, new Date());
+      if (sug) pick.append(el('span', 'muted small', ' · ' + yearLabel(sug)));
+      const ren = el('button', 'icon-btn', '✎'); ren.type = 'button'; ren.setAttribute('aria-label', t('profile.edit'));
+      ren.setAttribute('aria-expanded', String(editingProfile === pr.id));
+      ren.addEventListener('click', () => { editingProfile = editingProfile === pr.id ? null : pr.id; renderProfiles(); });
       const del = el('button', 'icon-btn', '🗑'); del.type = 'button'; del.setAttribute('aria-label', t('profile.delete'));
       del.addEventListener('click', async () => {
         if (Profiles.list.length <= 1) return toast(t('profile.lastOne'));
@@ -1084,7 +1210,9 @@
         renderProfiles(); render();
         if (!$('#profileDlg').open) $('#profileDlg').showModal();
       });
-      li.append(pick, ren, del); ul.append(li);
+      li.append(pick, ren, del);
+      if (editingProfile === pr.id) li.append(profileEditor(pr));
+      ul.append(li);
     });
     const full = Profiles.list.length >= MAX_PROFILES;
     $('#profileNew').disabled = full; $('#profileAddBtn').disabled = full;
@@ -1092,6 +1220,7 @@
   }
   function loadProfileSettings() {
     S.settings = Object.assign({}, defaults, store.get(Profiles.setKey(), {}));
+    applySuggestedYear();
   }
   function switchProfile(id) {
     if (S.screen === 'quiz' || S.screen === 'loading') return toast(t('profile.busy'));
@@ -1171,6 +1300,37 @@
   $('#againBtn').addEventListener('click', () => startQuiz(S.lastQuizSettings || S.settings));
   $('#homeBtn').addEventListener('click', () => go('home'));
   $('#lockBtn').addEventListener('click', () => { S.parent = false; go('home'); });
+  $('#csvExport').addEventListener('click', () => {
+    const pr = Profiles.active, name = Profiles.name(pr);
+    const text = Records.toCSV({ name: pr.name || name, schoolYear: pr.schoolYear, schoolYearSet: pr.schoolYearSet, dob: pr.dob },
+      store.get(histKey(), []), store.get(Profiles.badgeKey(), []));
+    const a = el('a'); a.href = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+    a.download = 'student-practice_' + name.replace(/[^\p{L}\p{N}_-]+/gu, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    toast(t('csv.exported', { name }));
+  });
+  $('#csvImportBtn').addEventListener('click', () => $('#csvImport').click());
+  $('#csvImport').addEventListener('change', async e => {
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
+    if (!file) return;
+    let data;
+    try { data = Records.fromCSV(await file.text()); }
+    catch (err) { return toast(t(err.message === 'size' ? 'csv.tooBig' : 'csv.bad'), 7000); }
+    const pr = Profiles.active, name = Profiles.name(pr);
+    if (!confirm(t('csv.importConfirm', { name, s: data.history.length, b: data.badges.length }))) return;
+    const h = Records.merge(store.get(histKey(), []), data.history, Records.sessionKey, 100);
+    const b = Records.merge(store.get(Profiles.badgeKey(), []), data.badges, Records.badgeKey, 500);
+    store.set(histKey(), h.list); store.set(Profiles.badgeKey(), b.list);
+    const st = data.student;
+    if (st) {   // details fill gaps only: what was entered on this device wins
+      Profiles.update(pr.id, { name: pr.name || st.name, schoolYear: pr.schoolYear || st.schoolYear,
+        schoolYearSet: pr.schoolYear ? pr.schoolYearSet : st.schoolYearSet, dob: pr.dob || st.dob });
+      applySuggestedYear();
+    }
+    render();
+    toast(t('csv.imported', { s: h.added, b: b.added }), 7000);
+  });
   $('#changePin').addEventListener('click', async () => { if (await pinDialog('change')) toast(t('parent.saved')); });
   $('#aiKey').addEventListener('input', () => { $('#aiKey').dataset.touched = '1'; });
   $('#aiSave').addEventListener('click', () => {
@@ -1190,6 +1350,7 @@
     const pr = Profiles.add(name);
     if (!pr) return toast(t('profile.full'));
     $('#profileNew').value = '';
+    editingProfile = pr.id;                     // a new student: ask for the details straight away
     loadProfileSettings(); renderProfiles(); render();
     toast(t('profile.switched', { name: Profiles.name(pr) }));
   });
@@ -1217,6 +1378,13 @@
     if (S.screen === 'quiz' && S.quiz && (S.quiz.exam ? !S.quiz.finished : S.quiz.st.some(x => x.status !== 'answering'))) { e.preventDefault(); e.returnValue = ''; }
   });
 
+  /* Test hook: lets tests/flows.js answer a set correctly to check that badges are earned. Read-only, and never on a
+     Production host, so students there cannot use it to see answers. */
+  if (!(self.PRODUCTION_HOSTS || []).includes(location.hostname)) {
+    window.__testAnswers = () => (S.quiz ? S.quiz.questions.map(q => ({ type: q.type, answer: q.answer, correct: q.correct })) : null);
+  }
+
   registerSW();
+  applySuggestedYear();
   go('home');
 })();

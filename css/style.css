@@ -590,3 +590,34 @@ legend.sec-title { padding: 0; }
 .tile-box { flex: 1; width: 100%; justify-content: flex-start; padding-top: 1.1rem; }
 .tile-icon { flex: none; width: 54px; height: 54px; font-size: 1.8rem; line-height: 1; }
 .tile-icon svg { width: 34px; height: 34px; display: block; }
+
+/* ---------- v1.7.0: info icon, badge collection, student details ---------- */
+.info { position: relative; display: inline-flex; vertical-align: middle; margin-left: 0.15rem; }
+/* 44 px to tap, drawn small: the negative margin keeps the label line from growing */
+.info-btn { width: 44px; height: 44px; margin: -11px -8px; padding: 0; border: 0; background: none; color: var(--muted); cursor: help; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; }
+.info-btn svg { width: 19px; height: 19px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+.info-btn:hover, .info.open .info-btn { color: var(--pri); }
+.tip { position: absolute; left: -6px; top: calc(100% + 6px); z-index: 40; width: max-content; max-width: min(280px, 80vw); padding: 0.5rem 0.65rem; border-radius: 10px;
+  background: var(--ink); color: var(--bg); font-size: 0.86rem; font-weight: 500; line-height: 1.35; letter-spacing: 0; text-transform: none; white-space: normal;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, .25); visibility: hidden; pointer-events: none; }
+.info:hover .tip, .info-btn:focus-visible + .tip, .info.open .tip { visibility: visible; }
+
+.badge-head { display: flex; align-items: center; gap: 0.2rem; }
+.badge-head h3 { margin: 0; }
+.badge-grid { width: 100%; border-collapse: separate; border-spacing: 0.35rem; margin-top: 0.4rem; table-layout: fixed; }
+.badge-grid caption { text-align: left; color: var(--muted); font-size: 0.9rem; padding: 0 0.35rem; }
+.badge-grid th.corner { background: none; }
+.badge-grid th { font-weight: 600; font-size: 0.85rem; color: var(--muted); text-align: left; }
+.badge-grid th[scope="col"] { text-align: center; font-size: 1.15rem; }
+.badge-grid td { text-align: center; height: 44px; border-radius: 12px; background: var(--surface-2); font-size: 1.15rem; font-weight: 700; }
+.badge-grid td.got { background: #fef3c7; color: #7c4a03; }
+.badge-grid td.empty { filter: grayscale(1); opacity: .35; }
+.badge-shelf { flex-direction: column; align-items: stretch; }
+.badge-shelf h4 { margin: 0.8rem 0 0.2rem; font-size: 0.92rem; color: var(--muted); }
+.badge-others li { padding: 0.15rem 0; font-size: 0.92rem; }
+@media (prefers-color-scheme: dark) { .badge-grid td.got { background: #3b2a06; color: #fde68a; } }
+
+.profile-list li { flex-wrap: wrap; }
+.profile-edit { flex-basis: 100%; display: grid; gap: 0.5rem; padding: 0.6rem 0 0.2rem; }
+.profile-edit .field { display: grid; gap: 0.2rem; font-size: 0.9rem; color: var(--muted); }
+.profile-edit input, .profile-edit select { min-height: 44px; padding: 0 0.7rem; border: 1.5px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }
