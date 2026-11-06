@@ -37,9 +37,11 @@
     const ref = item.ref || {}, O = root.Olympiad, S = root.Selective;
     const year = ref.year || item.year || fb.year || 6, diff = ref.diff || item.diff || fb.diff || 2;
     let out = [];
-    if (ref.oly !== undefined && O && O.T[ref.oly]) {
+    // only templates that exist: a ref from an imported file may name anything
+    const own = (o, k) => !!o && Object.prototype.hasOwnProperty.call(o, k);
+    if (ref.oly !== undefined && O && own(O.T, ref.oly) && typeof O.T[ref.oly].fn === 'function') {
       out = fromTemplate(O.T[ref.oly].fn, n, item).map(q => Object.assign(q, { topic: item.topic || 'olymp', olympiad: true, subject: 'maths', year, diff, ref: Object.assign({}, ref) }));
-    } else if (ref.sel && S && S.T[ref.sel[0]] && S.T[ref.sel[0]][ref.sel[1]]) {
+    } else if (Array.isArray(ref.sel) && S && own(S.T, ref.sel[0]) && own(S.T[ref.sel[0]], ref.sel[1]) && typeof S.T[ref.sel[0]][ref.sel[1]].fn === 'function') {
       out = fromTemplate(S.T[ref.sel[0]][ref.sel[1]].fn, n, item);
     }
     if (out.length < n) {

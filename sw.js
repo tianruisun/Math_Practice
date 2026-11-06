@@ -22,6 +22,7 @@ const ASSETS = [
   './js/gen-selective.js',
   './js/gen-comp.js',
   './js/similar.js',
+  './js/records.js',
   './js/ai.js',
   './js/app.js',
   './manifest.webmanifest',

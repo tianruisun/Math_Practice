@@ -11,9 +11,14 @@
   const r1 = n => Math.round(n * 10) / 10;
   const svg = (w, h, body, label) =>
     `<svg class="fig-svg" viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" role="img" aria-label="${esc(label || '')}" xmlns="http://www.w3.org/2000/svg">${body}</svg>`;
-  const text = (x, y, s, o = {}) =>
+  /* Every figure is drawn with a budget of marks. The loops below step by numbers from the figure (step, minor, w, xmax),
+     and a figure read from a progress file could make one endless (step 0) and freeze the page (v1.7.0 R3). */
+  const BUDGET = 5000;
+  let budget = BUDGET;
+  const spend = () => { if (--budget < 0) throw new Error('figure too large'); };
+  const text = (x, y, s, o = {}) => spend() ||
     `<text x="${r1(x)}" y="${r1(y)}" class="${o.cls || 'ft'}" text-anchor="${o.anchor || 'middle'}"${o.rot ? ` transform="rotate(${o.rot} ${r1(x)} ${r1(y)})"` : ''}${o.size ? ` font-size="${o.size}"` : ''}>${esc(s)}</text>`;
-  const line = (x1, y1, x2, y2, cls = 'fl') => `<line x1="${r1(x1)}" y1="${r1(y1)}" x2="${r1(x2)}" y2="${r1(y2)}" class="${cls}"/>`;
+  const line = (x1, y1, x2, y2, cls = 'fl') => spend() || `<line x1="${r1(x1)}" y1="${r1(y1)}" x2="${r1(x2)}" y2="${r1(y2)}" class="${cls}"/>`;
 
   /* ---------- column graph ---------- */
   function bar(f, lang) {
@@ -148,6 +153,7 @@
   function picto(f, lang) {
     const rows = f.rows.map(r => {
       const whole = Math.floor(r.count), half = r.count - whole >= 0.5;
+      if (!(whole >= 0 && whole <= 200)) throw new Error('figure too large');
       const icons = `<span class="picons">${esc(f.icon).repeat(whole)}${half ? `<span class="phalf">${esc(f.icon)}</span>` : ''}</span>`;
       return `<tr><th scope="row">${esc(L(r.label, lang))}</th><td>${icons}</td></tr>`;
     }).join('');
@@ -239,11 +245,18 @@
 
   const R = { bar, line: lineGraph, dial, jug, clock, spinner, shape, grid, picto, table, pie, coord, triangle };
   function render(fig, lang) {
-    if (!fig || !R[fig.type]) return '';
+    if (!fig || !Object.prototype.hasOwnProperty.call(R, fig.type)) return '';
+    budget = BUDGET;
     try { return `<figure class="fig fig-${fig.type}">${R[fig.type](fig, lang || 'en')}</figure>`; }
     catch (e) { console.warn('figure failed', e); return ''; }
   }
-  const api = { render, esc, math, questionHTML };
+  /* Whether a figure draws without an error: used to check a figure read from a progress file (R2.3, v1.7.0). */
+  function draws(fig) {
+    if (!fig || !Object.prototype.hasOwnProperty.call(R, fig.type)) return false;
+    budget = BUDGET;
+    try { return typeof R[fig.type](fig, 'en') === 'string'; } catch (e) { return false; }
+  }
+  const api = { render, draws, esc, math, questionHTML };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.Fig = api;
 })(typeof window !== 'undefined' ? window : globalThis);

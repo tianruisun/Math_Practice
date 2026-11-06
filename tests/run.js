@@ -256,5 +256,191 @@ t('F.4 Year 1-3 fraction multiple choice has 4 options, all different values', (
   });
 }
 
+/* v1.7.0: badges, suggested year, progress file (js/records.js) */
+{
+  const Rec = require('../js/records.js');
+  const base = { subject: 'maths', year: 4, diff: 2, n: 10, correct: 10, firstTry: 10, seconds: 100 };
+  t('badges: all three for a fast, first-try, perfect set', () => assert.deepStrictEqual(Rec.awardsFor(base), ['perfect', 'firstTry', 'speed']));
+  t('badges: none below 100%', () => assert.deepStrictEqual(Rec.awardsFor({ ...base, correct: 9 }), []));
+  t('badges: a second try loses First try only', () => assert.deepStrictEqual(Rec.awardsFor({ ...base, firstTry: 9 }), ['perfect', 'speed']));
+  t('badges: speed limit per difficulty (Standard 30 s a question)', () => {
+    assert.ok(Rec.awardsFor({ ...base, seconds: 300 }).includes('speed'));
+    assert.ok(!Rec.awardsFor({ ...base, seconds: 301 }).includes('speed'));
+    assert.ok(Rec.awardsFor({ ...base, diff: 4, seconds: 900 }).includes('speed'));
+  });
+  t('badges: fewer than 5 questions earn Perfect only', () => assert.deepStrictEqual(Rec.awardsFor({ ...base, n: 4, correct: 4, firstTry: 4, seconds: 4 }), ['perfect']));
+  t('badges: timed papers earn Perfect only', () => assert.deepStrictEqual(Rec.awardsFor({ ...base, paper: 'sel:full' }), ['perfect']));
+  t('badges: each year and difficulty is its own level', () => {
+    const col = Rec.collection([
+      { kind: 'perfect', subject: 'maths', year: 4, diff: 2 }, { kind: 'perfect', subject: 'maths', year: 4, diff: 2 },
+      { kind: 'perfect', subject: 'maths', year: 5, diff: 2 }, { kind: 'speed', subject: 'maths', year: 4, diff: 3 },
+      { subject: 'maths', topic: 'mixed', n: 5 }   // a v1.6 badge: no level recorded
+    ]);
+    assert.deepStrictEqual(col, { 'maths:4:2': { perfect: 2 }, 'maths:5:2': { perfect: 1 }, 'maths:4:3': { speed: 1 }, earlier: { perfect: 1 } });
+  });
+
+  const nov = new Date(2026, 10, 6);
+  t('suggested year: school year entered this year', () => assert.strictEqual(Rec.suggestYear({ schoolYear: 4, schoolYearSet: 2026 }, nov), 4));
+  t('suggested year: moves up each new calendar year', () => assert.strictEqual(Rec.suggestYear({ schoolYear: 4, schoolYearSet: 2026 }, new Date(2028, 1, 1)), 6));
+  t('suggested year: school year wins over birth month', () => assert.strictEqual(Rec.suggestYear({ schoolYear: 3, schoolYearSet: 2026, dob: '2016-03' }, nov), 3));
+  t('suggested year: born Jan-Jul starts Kindergarten the year they turn 5', () => {
+    assert.strictEqual(Rec.suggestYear({ dob: '2016-03' }, nov), 5);   // K 2021, Year 5 in 2026
+    assert.strictEqual(Rec.suggestYear({ dob: '2016-07' }, nov), 5);
+  });
+  t('suggested year: born Aug-Dec starts a year later', () => assert.strictEqual(Rec.suggestYear({ dob: '2016-08' }, nov), 4));
+  t('suggested year: kept within Years 1-12, null when unknown', () => {
+    assert.strictEqual(Rec.suggestYear({ dob: '2022-01' }, nov), 1);
+    assert.strictEqual(Rec.suggestYear({ dob: '2000-01' }, nov), 12);
+    assert.strictEqual(Rec.suggestYear({}, nov), null);
+    assert.strictEqual(Rec.suggestYear({ dob: 'not a date' }, nov), null);
+  });
+
+  const student = { name: 'Lily, "Li" 李', schoolYear: 4, schoolYearSet: 2026, dob: '2016-03' };
+  const history = [
+    { date: 1762400000000, subject: 'maths', year: 4, topic: 'frac', diff: 2, n: 5, correct: 4, stars: 2, time: null, byTopic: { frac: [4, 5] },
+      wrong: [{ topic: 'frac', type: 'input', q: { en: 'What is 1/2 + 1/4?\nSay "why", too.', zh: '1/2 + 1/4 等于多少？' }, answer: '3/4', given: ['=1+1'] }] },
+    { date: 1762500000000, subject: 'sel', year: 6, topic: 'sel', diff: 2, n: 35, correct: 35, stars: 3, time: 1800000, byTopic: {}, wrong: [] }
+  ];
+  const badges = [{ date: 1762500000000, kind: 'perfect', subject: 'sel', paper: 'sel:full', n: 35 }, { date: 1762400000000, kind: 'speed', subject: 'maths', year: 4, diff: 2, n: 5 }];
+  const csv = Rec.toCSV(student, history, badges);
+  t('progress file: one header, one student, every session and badge', () => {
+    const rows = Rec.parseCSV(csv);
+    assert.strictEqual(rows[0].join(','), Rec.COLUMNS.join(','));
+    assert.deepStrictEqual(rows.slice(1).map(r => r[0]), ['student', 'session', 'session', 'badge', 'badge']);
+  });
+  t('progress file: round trip restores everything exactly', () => {
+    const back = Rec.fromCSV(csv);
+    assert.deepStrictEqual(back.student, student);
+    assert.deepStrictEqual(back.history, history);
+    assert.deepStrictEqual(back.badges, badges);
+    assert.strictEqual(back.skipped, 0);
+  });
+  t('progress file: readable columns for a spreadsheet', () => {
+    const r = Rec.parseCSV(csv)[2];
+    assert.deepStrictEqual(r.slice(0, 14), ['session', '2025-11-06T03:33:20.000Z', '', '', '', 'maths', '4', 'frac', '2', '5', '4', '2', '', '']);
+  });
+  t('progress file: a cell starting with = is not run as a spreadsheet formula', () => {
+    const c = Rec.toCSV({ name: '=HYPERLINK("x")' }, [], []);
+    assert.ok(c.includes(`"'=HYPERLINK(""x"")"`), c.split('\r\n')[1]);
+    assert.strictEqual(Rec.fromCSV(c).student.name, '=HYPERLINK("x")');
+  });
+  t('progress file: a file from elsewhere is refused', () => {
+    assert.throws(() => Rec.fromCSV('name,score\nA,1\n'), /format/);
+    assert.throws(() => Rec.fromCSV(''), /format/);
+    assert.throws(() => Rec.fromCSV('x'.repeat(2 * 1024 * 1024 + 1)), /size/);
+  });
+  t('progress file: impossible rows are skipped, not imported', () => {
+    const bad = Rec.COLUMNS.join(',') + '\r\nsession,2026-01-01T00:00:00Z,,,,maths,4,frac,2,5,9,,,,\r\nsession,not a date,,,,maths,4,frac,2,5,4,,,,\r\nmystery,,,,,,,,,,,,,,\r\n';
+    const r = Rec.fromCSV(bad);
+    assert.strictEqual(r.history.length, 0);
+    assert.strictEqual(r.skipped, 3);
+  });
+  t('progress file: rows typed in a spreadsheet (no data column) still import', () => {
+    const typed = Rec.COLUMNS.join(',') + '\r\nsession,2026-03-01T09:00:00Z,,,,maths,5,dec,3,10,8,2,,,\r\nbadge,2026-03-01T09:00:00Z,,,,maths,5,dec,3,10,,,,firstTry,\r\n';
+    const r = Rec.fromCSV(typed);
+    assert.strictEqual(r.history.length, 1); assert.strictEqual(r.history[0].correct, 8); assert.strictEqual(r.history[0].diff, 3);
+    assert.strictEqual(r.badges[0].kind, 'firstTry'); assert.strictEqual(Rec.levelOf(r.badges[0]), 'maths:5:3');
+  });
+  /* R1.1: a file the app accepts must not break a screen. Each field a screen reads is checked on import. */
+  const withData = o => Rec.COLUMNS.join(',') + '\r\nsession,,,,,,,,,,,,,,' + '"' + JSON.stringify(o).replace(/"/g, '""') + '"\r\n';
+  const ok = { date: 1762400000000, subject: 'maths', year: 4, topic: 'frac', diff: 2, n: 5, correct: 4 };
+  t('import checks inside data: stars kept to 0-3, time and marks in range', () => {
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, stars: 99 })).history[0].stars, undefined);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, stars: -1 })).history[0].stars, undefined);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, stars: 2 })).history[0].stars, 2);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, time: 'x' })).history[0].time, null);
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, time: 5000 })).history[0].time, 5000);
+    const m = Rec.fromCSV(withData({ ...ok, marks: 50, maxMarks: 10 })).history[0];
+    assert.ok(!('marks' in m) && !('maxMarks' in m));
+    assert.strictEqual(Rec.fromCSV(withData({ ...ok, n: 2.5, correct: 1 })).skipped, 1);
+  });
+  t('import checks inside data: questions the review cannot show are dropped', () => {
+    const good = { topic: 'frac', type: 'input', q: { en: '1/2 + 1/4?' }, answer: '3/4', given: ['1'] };
+    const mc = { topic: 'pat', type: 'mc', q: { en: 'Pick', zh: '选' }, choices: [{ en: 'a' }, { en: 'b' }], correct: 1, given: [0, 9, 'x'] };
+    const wrong = [null, 5, { q: null }, { q: { en: 7 } }, { q: 'text' }, { type: 'mc', q: { en: 'x' }, choices: [{ en: 'a' }], correct: 3 },
+      { type: 'input', q: { en: 'no answer' } }, good, mc];
+    const s = Rec.fromCSV(withData({ ...ok, wrong })).history[0];
+    assert.strictEqual(s.wrong.length, 2);
+    assert.deepStrictEqual(s.wrong[0], good);
+    assert.deepStrictEqual(s.wrong[1].given, [0]);        // a choice that does not exist is not "given"
+  });
+  t('import checks inside data: byTopic, refs and figures are well-formed', () => {
+    const s = Rec.fromCSV(withData({ ...ok, byTopic: { frac: [4, 5], bad: [9, 5], worse: 'x', '__proto__': [1, 1] },
+      wrong: [{ type: 'input', q: { en: 'q' }, answer: 1, ref: { oly: 'constructor', sel: ['__proto__', 'x'], gen: 'frac', year: 99 }, fig: { type: 'x" onload="y' } }] })).history[0];
+    assert.deepStrictEqual(s.byTopic, { frac: [4, 5] });
+    assert.deepStrictEqual(s.wrong[0].ref, { gen: 'frac' });
+    assert.ok(!('fig' in s.wrong[0]));
+    assert.deepStrictEqual(Rec.fromCSV(withData({ ...ok, byTopic: 'x' })).history[0].byTopic, { frac: [4, 5] });
+  });
+  t('similar: a ref naming no real template does not throw', () => {
+    const Sim = require('../js/similar.js');
+    const item = { topic: 'frac', type: 'input', q: { en: 'q' }, answer: '1', ref: { oly: 'constructor', sel: ['constructor', 'name'] } };
+    assert.doesNotThrow(() => Sim.makeSet([{ q: item, fb: { subject: 'maths', year: 4, diff: 2 } }], 2, 10));
+  });
+  /* R2.2: an empty cell typed in a spreadsheet is missing, not 0 */
+  const typedRow = cells => Rec.COLUMNS.join(',') + '\r\n' + cells + '\r\n';
+  t('import: a blank stars cell is worked out from the score, not stored as 0', () => {
+    const r = Rec.fromCSV(typedRow('session,2026-03-01T09:00:00Z,,,,maths,5,dec,3,5,5,,,,'));
+    assert.strictEqual(r.history.length, 1); assert.ok(!('stars' in r.history[0]), JSON.stringify(r.history[0]));
+  });
+  t('import: a blank correct (or questions) cell skips the row', () => {
+    const r = Rec.fromCSV(typedRow('session,2026-03-01T09:00:00Z,,,,maths,5,dec,3,5,,2,,,') + 'session,2026-03-02T09:00:00Z,,,,maths,5,dec,3, ,4,,,,\r\n');
+    assert.strictEqual(r.history.length, 0); assert.strictEqual(r.skipped, 2);
+  });
+  /* R2.3: names the app does not know are not imported. `known` is what the page passes: text keys and figures. */
+  const i18nSrc = require('fs').readFileSync(require('path').join(__dirname, '../js/i18n.js'), 'utf8');
+  const keys = new Set([...i18nSrc.matchAll(/^\s*'([\w.]+)':/gm)].map(m => m[1]));
+  const Fig = require('../js/figures.js');
+  const known = { key: k => keys.has(k), fig: f => Fig.draws(f) };
+  t('import vocabulary: unknown subject or a practice set with no year is skipped; unknown topic becomes mixed', () => {
+    const r = Rec.fromCSV(withData({ ...ok, subject: 'zzz' }) + 'session,2026-03-01T09:00:00Z,,,,maths,,frac,2,5,4,,,,\r\n' +
+      'session,2026-03-01T09:00:00Z,,,,sel,,selfull,2,35,30,,,,\r\n', known);
+    assert.strictEqual(r.skipped, 2); assert.strictEqual(r.history.length, 1); assert.strictEqual(r.history[0].subject, 'sel');
+    const s = Rec.fromCSV(withData({ ...ok, topic: 'zzz', byTopic: { frac: [4, 5], zzz: [1, 1] }, wrong: [{ topic: 'zzz', type: 'input', q: { en: 'q' }, answer: 1 }] }), known).history[0];
+    assert.strictEqual(s.topic, 'mixed'); assert.deepStrictEqual(s.byTopic, { frac: [4, 5] }); assert.strictEqual(s.wrong[0].topic, 'mixed');
+  });
+  t('import vocabulary: a badge for a paper the app does not have is skipped', () => {
+    const badge = o => 'badge,,,,,,,,,,,,,,"' + JSON.stringify(o).replace(/"/g, '""') + '"\r\n';
+    const r = Rec.fromCSV(Rec.COLUMNS.join(',') + '\r\n' + badge({ date: 1, kind: 'perfect', subject: 'sel', paper: 'x' }) +
+      badge({ date: 2, kind: 'perfect', subject: 'comp', paper: 'comp' }) + badge({ date: 3, kind: 'perfect', subject: 'sel', paper: 'sel:full' }) +
+      badge({ date: 4, kind: 'perfect', subject: 'comp', paper: 'comp:amc_j:short' }) + badge({ date: 5, kind: 'perfect', subject: 'zzz', year: 4, diff: 2 }), known);
+    assert.deepStrictEqual(r.badges.map(b => b.paper), ['sel:full', 'comp:amc_j:short']); assert.strictEqual(r.skipped, 3);
+  });
+  t('import vocabulary: a figure is kept only if it draws', () => {
+    const good = { type: 'clock', h: 3, m: 15 };
+    const w = f => ({ type: 'input', q: { en: 'q' }, answer: 1, fig: f });
+    const s = Rec.fromCSV(withData({ ...ok, wrong: [w({ type: 'bar', values: 'x' }), w(good)] }), known).history[0];
+    assert.ok(!('fig' in s.wrong[0])); assert.deepStrictEqual(s.wrong[1].fig, good);
+  });
+  t('figures: a figure whose numbers would loop for ever stops (budget)', () => {
+    const t0 = Date.now();
+    assert.strictEqual(Fig.draws({ type: 'bar', values: [1], cats: ['a'], max: 10, step: 0 }), false);
+    assert.strictEqual(Fig.draws({ type: 'grid', w: 1e9, h: 1, shapes: [] }), false);
+    assert.strictEqual(Fig.draws({ type: 'picto', icon: 'x', key: '', rows: [{ label: 'a', count: 1e9 }] }), false);
+    const warn = console.warn; console.warn = () => {};      // render logs the failure it catches
+    try { assert.strictEqual(Fig.render({ type: 'jug', max: 10, value: 1, minor: 0, labelStep: 1, unit: 'mL' }), ''); } finally { console.warn = warn; }
+    assert.ok(Date.now() - t0 < 2000, 'took ' + (Date.now() - t0) + ' ms');
+    assert.ok(Fig.draws({ type: 'bar', values: [3, 5], cats: ['a', 'b'], max: 10, step: 2 }));
+  });
+  t('import merge: no duplicates, oldest first, capped', () => {
+    const a = [{ date: 3, subject: 'm', n: 1, correct: 1 }, { date: 1, subject: 'm', n: 1, correct: 1 }];
+    const m = Rec.merge(a, [{ date: 1, subject: 'm', n: 1, correct: 1 }, { date: 2, subject: 'm', n: 1, correct: 0 }], Rec.sessionKey, 2);
+    assert.strictEqual(m.added, 1);
+    assert.deepStrictEqual(m.list.map(x => x.date), [2, 3]);
+  });
+}
+
+/* every text key is defined once per language (a second definition silently replaces the first) */
+t('i18n: no key defined twice in a language', () => {
+  const src = require('fs').readFileSync(require('path').join(__dirname, '../js/i18n.js'), 'utf8');
+  const zhAt = src.indexOf('\n    zh: {');
+  assert.ok(zhAt > 0, 'zh block not found');
+  for (const [name, part] of [['en', src.slice(0, zhAt)], ['zh', src.slice(zhAt)]]) {
+    const keys = [...part.matchAll(/^\s*'([\w.]+)':/gm)].map(m => m[1]);
+    const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
+    assert.deepStrictEqual(dup, [], name + ' duplicates');
+  }
+});
+
 console.log(`${pass} passed, ${fail} failed (${gen} generated questions checked)`);
 process.exit(fail ? 1 : 0);
