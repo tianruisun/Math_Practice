@@ -28,4 +28,15 @@ function serve(root) {
   return new Promise(resolve => server.listen(0, '127.0.0.1', () => resolve(server)));
 }
 
-module.exports = { serve, fileFor, TYPES };
+// The --site address as the suites need it: http(s) only, and the path always ends in '/', because the suites add
+// file names straight onto it ('https://x.pages.dev' + 'version.js' was a wrong host). null if it is not a web address.
+function siteURL(text) {
+  let u;
+  try { u = new URL(String(text)); } catch (e) { return null; }
+  if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+  if (!u.pathname.endsWith('/')) u.pathname += '/';
+  u.search = ''; u.hash = '';
+  return u.href;
+}
+
+module.exports = { serve, fileFor, siteURL, TYPES };

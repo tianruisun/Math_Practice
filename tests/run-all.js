@@ -3,7 +3,7 @@
    npm test -- --site=https://test.<project>.pages.dev   a live site (unit tests still run on the local code) */
 const { spawnSync } = require('child_process');
 const path = require('path');
-const { serve } = require('./serve.js');
+const { serve, siteURL } = require('./serve.js');
 const smoke = require('./smoke.js');
 const CONFIG = require('./config.js');
 const flows = CONFIG.flows ? require('./flows.js') : null;
@@ -36,7 +36,8 @@ function nodeSuite(file) {
   const arg = process.argv.find(a => a.startsWith('--site='));
   let server = null, site = arg && arg.slice(7);
   if (!site) { server = await serve(ROOT); site = `http://127.0.0.1:${server.address().port}/`; }
-  else if (!/^https?:\/\//.test(site)) { console.log(`--site must start with http:// or https:// (got ${site})`); process.exit(1); }
+  else if (!siteURL(site)) { console.log(`--site must start with http:// or https:// (got ${site})`); process.exit(1); }
+  else site = siteURL(site);   // with or without a trailing '/'
   const results = { unit: nodeSuite(CONFIG.unit), kit: nodeSuite('tests/kit.js') };
   results.smoke = await browserSuite('smoke', () => smoke.run(site, { local: !!server }));
   if (flows) results.flows = await browserSuite('flows', () => flows.run(site));
