@@ -99,7 +99,8 @@
     return rows.filter(r => r.length > 1 || r[0] !== '');
   }
 
-  const num = (v, lo, hi) => { const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
+  // an empty cell is missing, not 0 (Number('') is 0) (R2.2, v1.7.0)
+  const num = (v, lo, hi) => { if (v === null || v === undefined || typeof v === 'boolean' || String(v).trim() === '') return null; const n = Number(v); return Number.isFinite(n) && n >= lo && n <= hi ? n : null; };
   const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
   const json = v => { try { const o = JSON.parse(v); return o && typeof o === 'object' && !Array.isArray(o) ? o : null; } catch (e) { return null; } };
 
@@ -109,13 +110,30 @@
   const text2 = (v, max) => (isObj(v) && typeof v.en === 'string'
     ? Object.assign({ en: v.en.slice(0, max) }, typeof v.zh === 'string' ? { zh: v.zh.slice(0, max) } : {}) : null);
 
+  /* What the app knows, given by the page to fromCSV: key(k) says whether a text key exists, fig(f) whether a figure
+     draws. A name the app does not know would show as a raw key (R2.3, v1.7.0). Without it (Node tests of the file
+     format alone) only the shapes are checked. Set for the length of one fromCSV call. */
+  let known = null;
+  const knows = k => !known || typeof known.key !== 'function' || known.key(k) === true;
+  const topicOk = k => k === 'mixed' || (WORD.test(k) && knows('topic.' + k));
+  const topicOf = v => { const k = str(v, 40); return topicOk(k) ? k : 'mixed'; };
+  const figOk = f => !known || typeof known.fig !== 'function' || known.fig(f) === true;
+  const TIMED = ['sel', 'comp'];
+  /* A timed paper's name as levelOf writes it: sel:<length> or comp:<paper>:<length>. */
+  function paperOk(p) {
+    const x = String(p).split(':');
+    if (x[0] === 'sel') return x.length === 2 && WORD.test(x[1]) && knows('sel.len.' + x[1]);
+    if (x[0] === 'comp') return x.length === 3 && topicOk(x[1]) && x[1] !== 'mixed' && WORD.test(x[2]) && knows('comp.len.' + x[2]);
+    return false;
+  }
+
   /* A question to review, from a file: only the fields the review screens read, each of the shape they expect.
      Returns null when the question could not be shown. */
   function cleanWrong(w) {
     if (!isObj(w)) return null;
     const q = text2(w.q, 2000);
     if (!q) return null;
-    const out = { q, topic: str(w.topic, 40) || 'mixed', type: w.type === 'mc' ? 'mc' : str(w.type, 20) || 'num' };
+    const out = { q, topic: topicOf(w.topic), type: w.type === 'mc' ? 'mc' : str(w.type, 20) || 'num' };
     if (out.type === 'mc') {
       const choices = Array.isArray(w.choices) ? w.choices.slice(0, 5).map(c => text2(c, 500)) : [];
       const correct = int(w.correct, 0, choices.length - 1);
@@ -128,7 +146,7 @@
       out.given = (Array.isArray(w.given) ? w.given : []).filter(g => typeof g === 'string' || typeof g === 'number').map(g => String(g).slice(0, 200)).slice(0, 5);
     }
     const sol = text2(w.sol, 4000); if (sol) out.sol = sol;
-    if (isObj(w.fig) && WORD.test(w.fig.type || '')) out.fig = w.fig;
+    if (isObj(w.fig) && WORD.test(w.fig.type || '') && figOk(w.fig)) out.fig = w.fig;
     const ref = cleanRef(w.ref); if (ref) out.ref = ref;
     if (QUESTION_SUBJECTS.includes(w.subject)) out.subject = w.subject;
     const year = int(w.year, 1, 14), diff = int(w.diff, 1, 4);
@@ -158,9 +176,13 @@
     const date = num(o.date, 0, 4102444800000) || Date.parse(row.date);
     const n = int(o.n !== undefined ? o.n : row.questions, 1, 200), correct = int(o.correct !== undefined ? o.correct : row.correct, 0, 200);
     if (!date || n === null || correct === null || correct > n) return null;
+    // a subject the app does not have, or a practice set with no year, cannot be shown: skipped and counted (R2.3)
+    const subject = str(o.subject || row.subject, 20) || 'maths';
+    const year = int(o.year !== undefined ? o.year : row.year, 1, 14);
+    if (!QUESTION_SUBJECTS.includes(subject) || (year === null && !TIMED.includes(subject))) return null;
     const s = Object.assign({}, o, {
-      date, n, correct, subject: str(o.subject || row.subject, 20) || 'maths', topic: str(o.topic || row.topic, 40) || 'mixed',
-      year: int(o.year !== undefined ? o.year : row.year, 1, 14), diff: int(o.diff !== undefined ? o.diff : row.difficulty, 1, 4)
+      date, n, correct, subject, topic: topicOf(o.topic || row.topic),
+      year, diff: int(o.diff !== undefined ? o.diff : row.difficulty, 1, 4)
     });
     const stars = int(o.stars !== undefined ? o.stars : row.stars, 0, 3);
     if (stars !== null) s.stars = stars; else delete s.stars;
@@ -174,7 +196,7 @@
     if (isObj(o.byTopic)) {
       for (const k of Object.keys(o.byTopic).slice(0, 50)) {
         const v = o.byTopic[k], c = Array.isArray(v) ? int(v[0], 0, 200) : null, t = Array.isArray(v) ? int(v[1], 1, 200) : null;
-        if (WORD.test(k) && c !== null && t !== null && c <= t) by[k] = [c, t];
+        if (topicOk(k) && c !== null && t !== null && c <= t) by[k] = [c, t];
       }
     }
     s.byTopic = isObj(o.byTopic) ? by : { [s.topic]: [correct, n] };   // timed papers record none
@@ -184,19 +206,26 @@
     const date = num(o.date, 0, 4102444800000) || Date.parse(row.date);
     if (!date) return null;
     const kind = KINDS.includes(o.kind || row.badge) ? (o.kind || row.badge) : 'perfect';
-    const b = Object.assign({}, o, { date, kind, subject: str(o.subject || row.subject, 20) || 'maths' });
+    const subject = str(o.subject || row.subject, 20) || 'maths';
+    if (!QUESTION_SUBJECTS.includes(subject)) return null;
+    const b = Object.assign({}, o, { date, kind, subject });
     // a timed-paper badge has no year or difficulty: only keep the ones that are there
     const year = int(o.year !== undefined ? o.year : row.year, 1, 14), diff = int(o.diff !== undefined ? o.diff : row.difficulty, 1, 4);
     if (year !== null) b.year = year; else delete b.year;
     if (diff !== null) b.diff = diff; else delete b.diff;
-    if (b.paper !== undefined) b.paper = str(b.paper, 40);
-    if (b.topic !== undefined) b.topic = str(b.topic, 40);
+    // a paper the app does not know would label its level with raw keys (R2.3): the badge is skipped
+    if (b.paper !== undefined && b.paper !== null) { if (!paperOk(b.paper)) return null; } else delete b.paper;
+    if (b.topic !== undefined) b.topic = topicOf(b.topic);
     if (b.n !== undefined) { const n = int(b.n, 1, 200); if (n !== null) b.n = n; else delete b.n; }
     return b;
   }
 
-  /* text → { student, history, badges, skipped } or throws Error('format') */
-  function fromCSV(text) {
+  /* text → { student, history, badges, skipped } or throws Error('format'). app: { key(k), fig(f) }, see `known`. */
+  function fromCSV(text, app) {
+    known = app || null;
+    try { return readCSV(text); } finally { known = null; }
+  }
+  function readCSV(text) {
     if (String(text).length > MAX_FILE) throw new Error('size');
     const rows = parseCSV(text);
     if (!rows.length || rows[0].join(',') !== COLUMNS.join(',')) throw new Error('format');

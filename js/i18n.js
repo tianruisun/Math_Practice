@@ -362,6 +362,7 @@
       'csv.exported': 'Saved {name}’s progress file.',
       'csv.importConfirm': 'Add this file to {name}’s progress? It has {s} session(s) and {b} badge(s). Nothing is deleted.',
       'csv.imported': 'Added {s} session(s) and {b} badge(s).',
+      'csv.skipped': '{n} row(s) could not be read and were left out.',
       'csv.bad': 'This is not a Student Practice progress file.',
       'csv.tooBig': 'This file is too large (over 2 MB).',
       'offline': 'You are offline – using built-in questions.'
@@ -725,6 +726,7 @@
       'csv.exported': '已保存{name}的学习记录文件。',
       'csv.importConfirm': '把这个文件加入{name}的学习记录吗？文件中有 {s} 次练习和 {b} 枚徽章。不会删除任何内容。',
       'csv.imported': '已添加 {s} 次练习和 {b} 枚徽章。',
+      'csv.skipped': '有 {n} 行无法读取，未导入。',
       'csv.bad': '这不是 Student Practice 的学习记录文件。',
       'csv.tooBig': '文件太大（超过 2 MB）。',
       'offline': '当前离线，使用内置题目。'

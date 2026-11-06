@@ -918,7 +918,9 @@
     // Each section is drawn on its own, so a record the screen cannot read hides only its own part, and
     // "Clear progress" is always there to recover (R1.1, v1.7.0).
     try { progressSections(box); } catch (e) { console.error('progress', e); }
-    appendClearButton(box);
+    // shown only when there is something to clear (R2.4, v1.7.0)
+    const has = k => { const v = store.get(k, []); return Array.isArray(v) && v.length > 0; };
+    if (has(histKey()) || has(Profiles.badgeKey())) appendClearButton(box);
   }
   function progressSections(box) {
     const part = fn => { try { fn(); } catch (e) { console.error('progress section', e); } };
@@ -970,7 +972,7 @@
     }
   }
 
-  /* Clear progress: always visible, protected by the parent PIN */
+  /* Clear progress: visible whenever there is progress, protected by the parent PIN */
   function appendClearButton(box) {
     const wrap = el('div', 'clear-row');
     const btn = el('button', 'btn secondary danger', '🗑 ' + t('prog.clear')); btn.type = 'button'; btn.id = 'clearProgress';
@@ -1179,6 +1181,7 @@
     yr.append(new Option(t('profile.yearUnset'), ''));
     for (let y = 1; y <= 12; y++) yr.append(new Option(yearLabel(y), String(y)));
     yr.value = pr.schoolYear ? String(Records.suggestYear({ schoolYear: pr.schoolYear, schoolYearSet: pr.schoolYearSet }, now)) : '';
+    const shownYear = yr.value;
     const dob = field('profile.dob', el('input')); dob.type = 'month'; dob.value = pr.dob || '';
     dob.min = (thisYear - 25) + '-01'; dob.max = thisYear + '-' + String(now.getMonth() + 1).padStart(2, '0');
     const row = el('div', 'row');
@@ -1189,9 +1192,12 @@
     f.addEventListener('submit', e => {
       e.preventDefault();
       const y = +yr.value || null, d = /^\d{4}-\d{2}$/.test(dob.value) ? dob.value : '';
+      // the year on Home is set again only when what the suggestion comes from changed; a name edit keeps a
+      // hand-picked year (R2.1, v1.7.0)
+      const changed = yr.value !== shownYear || d !== (pr.dob || '');
       Profiles.update(pr.id, { name: name.value.trim().slice(0, 20), schoolYear: y, schoolYearSet: y ? thisYear : null, dob: d });
       editingProfile = null;
-      if (pr === Profiles.active) applySuggestedYear(true);
+      if (pr === Profiles.active) applySuggestedYear(changed);
       renderProfiles(); render();
       toast(t('parent.saved'));
     });
@@ -1335,10 +1341,14 @@
     const file = e.target.files && e.target.files[0]; e.target.value = '';
     if (!file) return;
     let data;
-    try { data = Records.fromCSV(await file.text()); }
+    // only names the app knows: a text key that exists, a figure that draws (R2.3, v1.7.0)
+    const known = { key: k => Object.prototype.hasOwnProperty.call(window.I18N.STRINGS.en, k), fig: f => !window.Fig || Fig.draws(f) };
+    try { data = Records.fromCSV(await file.text(), known); }
     catch (err) { return toast(t(err.message === 'size' ? 'csv.tooBig' : 'csv.bad'), 7000); }
     const pr = Profiles.active, name = Profiles.name(pr);
-    if (!confirm(t('csv.importConfirm', { name, s: data.history.length, b: data.badges.length }))) return;
+    // rows the import refused are said, so a typo is not mistaken for "already imported" (R2.5, v1.7.0)
+    const skipped = data.skipped ? ' ' + t('csv.skipped', { n: data.skipped }) : '';
+    if (!confirm(t('csv.importConfirm', { name, s: data.history.length, b: data.badges.length }) + skipped)) return;
     const h = Records.merge(store.get(histKey(), []), data.history, Records.sessionKey, 100);
     const b = Records.merge(store.get(Profiles.badgeKey(), []), data.badges, Records.badgeKey, 500);
     store.set(histKey(), h.list); store.set(Profiles.badgeKey(), b.list);
@@ -1349,7 +1359,7 @@
       applySuggestedYear();
     }
     render();
-    toast(t('csv.imported', { s: h.added, b: b.added }), 7000);
+    toast(t('csv.imported', { s: h.added, b: b.added }) + skipped, 7000);
   });
   $('#changePin').addEventListener('click', async () => { if (await pinDialog('change')) toast(t('parent.saved')); });
   $('#aiKey').addEventListener('input', () => { $('#aiKey').dataset.touched = '1'; });

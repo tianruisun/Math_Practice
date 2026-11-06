@@ -319,6 +319,62 @@ async function run(site) {
       check('R1.2 a year that was the suggestion moves up', (await page.inputValue('#yearSel')) === '6', await page.inputValue('#yearSel'));
       await context.close();
     });
+
+    // R2.1 (v1.7.0): saving the student details keeps a hand-picked year unless the school year or birth month changed
+    await flow('R2.1 details save keeps a hand-picked year', async () => {
+      const y = new Date().getFullYear();
+      const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ann', schoolYear: 5, schoolYearSet: y }], active: 'p1' });
+      const { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 8, suggested: 5 }) });
+      check('R2.1 Home starts on the hand-picked Year 8', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
+      await page.click('#profileBtn');
+      await page.locator('#profileList .icon-btn').first().click();
+      await page.fill('.profile-edit input[type=text]', 'Anna');
+      await page.click('.profile-edit button[type=submit]');
+      await page.click('#profileClose');
+      check('R2.1 a name edit keeps Year 8', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
+      await page.click('#profileBtn');
+      await page.locator('#profileList .icon-btn').first().click();
+      await page.selectOption('.profile-edit select', '6');
+      await page.click('.profile-edit button[type=submit]');
+      await page.click('#profileClose');
+      check('R2.1 a new school year still sets the year', (await page.inputValue('#yearSel')) === '6', await page.inputValue('#yearSel'));
+      await context.close();
+    });
+
+    // R2.2-R2.5 (v1.7.0): rows typed in a spreadsheet, names the app does not know, skipped rows said, no Clear on an empty screen
+    await flow('R2 import and Progress', async () => {
+      const os = require('os'), fs = require('fs'), path = require('path'), Rec = require('../js/records.js');
+      const { context, page, errors } = await freshPage(browser, site, { [SETTINGS]: settings() });
+      await page.click('.tab[data-go="progress"]');
+      check('R2.4 no Clear progress with nothing to clear', (await page.locator('#clearProgress').count()) === 0);
+      const file = path.join(os.tmpdir(), 'Student_Practice-tests', 'typed.csv');
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      const badge = o => 'badge,,,,,,,,,,,,,,"' + JSON.stringify(o).replace(/"/g, '""') + '"';
+      fs.writeFileSync(file, [Rec.COLUMNS.join(','),
+        'session,2026-03-01T09:00:00Z,,,,maths,5,dec,3,5,5,,,,',        // blank stars: worked out from 5/5
+        'session,2026-03-02T09:00:00Z,,,,maths,5,dec,3,5,,,,,',         // blank correct: skipped
+        'session,2026-03-03T09:00:00Z,,,,zzz,5,zzz,3,5,4,,,,',          // unknown subject: skipped
+        'session,2026-03-04T09:00:00Z,,,,maths,5,zzz,3,5,4,,,,',        // unknown topic: mixed
+        badge({ date: Date.parse('2026-03-01T09:00:00Z'), kind: 'perfect', subject: 'sel', paper: 'x' })   // unknown paper: skipped
+      ].join('\r\n') + '\r\n');
+      await page.click('#parentBtn');
+      await typePin(page);
+      page.once('dialog', d => { page.confirmText = d.message(); });   // freshPage's own handler accepts it
+      await page.setInputFiles('#csvImport', file);
+      await page.waitForTimeout(300);
+      check('R2.5 the confirm says how many rows were left out', /3 row\(s\) could not be read/.test(page.confirmText || ''), page.confirmText);
+      check('R2.5 the toast says it too', /Added 2 session\(s\).*3 row\(s\) could not be read/.test(await page.textContent('#toast')), await page.textContent('#toast'));
+      const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('sp.history.p1') || '[]'));
+      check('R2.2 blank stars not stored as 0', stored.length === 2 && !('stars' in stored[0]), JSON.stringify(stored));
+      check('R2.3 unknown topic stored as mixed', stored[1] && stored[1].topic === 'mixed', JSON.stringify(stored[1]));
+      await page.click('.tab[data-go="progress"]');
+      const recent = await page.locator('#progBody ul.plain').first().textContent();
+      check('R2.2 a 5/5 set shows three stars', /5\/5\s*★★★/.test(recent), recent);
+      check('R2.3 no raw text keys on Progress', !/topic\.|subject\.|null/.test(await page.textContent('#progBody')), recent);
+      check('R2.4 Clear progress shows once there is progress', (await page.locator('#clearProgress').count()) === 1);
+      check('R2 no page errors', errors.length === 0, errors.join(' | '));
+      await context.close();
+    });
   } finally {
     await browser.close();
   }

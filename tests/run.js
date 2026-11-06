@@ -377,6 +377,51 @@ t('F.4 Year 1-3 fraction multiple choice has 4 options, all different values', (
     const item = { topic: 'frac', type: 'input', q: { en: 'q' }, answer: '1', ref: { oly: 'constructor', sel: ['constructor', 'name'] } };
     assert.doesNotThrow(() => Sim.makeSet([{ q: item, fb: { subject: 'maths', year: 4, diff: 2 } }], 2, 10));
   });
+  /* R2.2: an empty cell typed in a spreadsheet is missing, not 0 */
+  const typedRow = cells => Rec.COLUMNS.join(',') + '\r\n' + cells + '\r\n';
+  t('import: a blank stars cell is worked out from the score, not stored as 0', () => {
+    const r = Rec.fromCSV(typedRow('session,2026-03-01T09:00:00Z,,,,maths,5,dec,3,5,5,,,,'));
+    assert.strictEqual(r.history.length, 1); assert.ok(!('stars' in r.history[0]), JSON.stringify(r.history[0]));
+  });
+  t('import: a blank correct (or questions) cell skips the row', () => {
+    const r = Rec.fromCSV(typedRow('session,2026-03-01T09:00:00Z,,,,maths,5,dec,3,5,,2,,,') + 'session,2026-03-02T09:00:00Z,,,,maths,5,dec,3, ,4,,,,\r\n');
+    assert.strictEqual(r.history.length, 0); assert.strictEqual(r.skipped, 2);
+  });
+  /* R2.3: names the app does not know are not imported. `known` is what the page passes: text keys and figures. */
+  const i18nSrc = require('fs').readFileSync(require('path').join(__dirname, '../js/i18n.js'), 'utf8');
+  const keys = new Set([...i18nSrc.matchAll(/^\s*'([\w.]+)':/gm)].map(m => m[1]));
+  const Fig = require('../js/figures.js');
+  const known = { key: k => keys.has(k), fig: f => Fig.draws(f) };
+  t('import vocabulary: unknown subject or a practice set with no year is skipped; unknown topic becomes mixed', () => {
+    const r = Rec.fromCSV(withData({ ...ok, subject: 'zzz' }) + 'session,2026-03-01T09:00:00Z,,,,maths,,frac,2,5,4,,,,\r\n' +
+      'session,2026-03-01T09:00:00Z,,,,sel,,selfull,2,35,30,,,,\r\n', known);
+    assert.strictEqual(r.skipped, 2); assert.strictEqual(r.history.length, 1); assert.strictEqual(r.history[0].subject, 'sel');
+    const s = Rec.fromCSV(withData({ ...ok, topic: 'zzz', byTopic: { frac: [4, 5], zzz: [1, 1] }, wrong: [{ topic: 'zzz', type: 'input', q: { en: 'q' }, answer: 1 }] }), known).history[0];
+    assert.strictEqual(s.topic, 'mixed'); assert.deepStrictEqual(s.byTopic, { frac: [4, 5] }); assert.strictEqual(s.wrong[0].topic, 'mixed');
+  });
+  t('import vocabulary: a badge for a paper the app does not have is skipped', () => {
+    const badge = o => 'badge,,,,,,,,,,,,,,"' + JSON.stringify(o).replace(/"/g, '""') + '"\r\n';
+    const r = Rec.fromCSV(Rec.COLUMNS.join(',') + '\r\n' + badge({ date: 1, kind: 'perfect', subject: 'sel', paper: 'x' }) +
+      badge({ date: 2, kind: 'perfect', subject: 'comp', paper: 'comp' }) + badge({ date: 3, kind: 'perfect', subject: 'sel', paper: 'sel:full' }) +
+      badge({ date: 4, kind: 'perfect', subject: 'comp', paper: 'comp:amc_j:short' }) + badge({ date: 5, kind: 'perfect', subject: 'zzz', year: 4, diff: 2 }), known);
+    assert.deepStrictEqual(r.badges.map(b => b.paper), ['sel:full', 'comp:amc_j:short']); assert.strictEqual(r.skipped, 3);
+  });
+  t('import vocabulary: a figure is kept only if it draws', () => {
+    const good = { type: 'clock', h: 3, m: 15 };
+    const w = f => ({ type: 'input', q: { en: 'q' }, answer: 1, fig: f });
+    const s = Rec.fromCSV(withData({ ...ok, wrong: [w({ type: 'bar', values: 'x' }), w(good)] }), known).history[0];
+    assert.ok(!('fig' in s.wrong[0])); assert.deepStrictEqual(s.wrong[1].fig, good);
+  });
+  t('figures: a figure whose numbers would loop for ever stops (budget)', () => {
+    const t0 = Date.now();
+    assert.strictEqual(Fig.draws({ type: 'bar', values: [1], cats: ['a'], max: 10, step: 0 }), false);
+    assert.strictEqual(Fig.draws({ type: 'grid', w: 1e9, h: 1, shapes: [] }), false);
+    assert.strictEqual(Fig.draws({ type: 'picto', icon: 'x', key: '', rows: [{ label: 'a', count: 1e9 }] }), false);
+    const warn = console.warn; console.warn = () => {};      // render logs the failure it catches
+    try { assert.strictEqual(Fig.render({ type: 'jug', max: 10, value: 1, minor: 0, labelStep: 1, unit: 'mL' }), ''); } finally { console.warn = warn; }
+    assert.ok(Date.now() - t0 < 2000, 'took ' + (Date.now() - t0) + ' ms');
+    assert.ok(Fig.draws({ type: 'bar', values: [3, 5], cats: ['a', 'b'], max: 10, step: 2 }));
+  });
   t('import merge: no duplicates, oldest first, capped', () => {
     const a = [{ date: 3, subject: 'm', n: 1, correct: 1 }, { date: 1, subject: 'm', n: 1, correct: 1 }];
     const m = Rec.merge(a, [{ date: 1, subject: 'm', n: 1, correct: 1 }, { date: 2, subject: 'm', n: 1, correct: 0 }], Rec.sessionKey, 2);
