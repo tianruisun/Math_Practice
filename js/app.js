@@ -10,12 +10,34 @@
   const lang = () => window.I18N.lang;
 
   /* ---------- storage (every access guarded: private mode etc.) ---------- */
+  /* Keys start with "sp." (Student_Practice). The GitHub Pages address shares its origin, and so its localStorage, with
+     other apps, so the prefix is the app's own name. Up to v1.6.3 the prefix was "mp.": move those keys once. */
+  (function moveOldKeys() {
+    try {
+      // list the keys first: removing one while walking by index can reorder the rest and skip a key
+      for (const k of Object.keys(localStorage)) {
+        if (!k.startsWith('mp.')) continue;
+        const nk = 'sp.' + k.slice(3);
+        if (localStorage.getItem(nk) === null) localStorage.setItem(nk, localStorage.getItem(k));
+        localStorage.removeItem(k);
+      }
+    } catch (e) { /* storage blocked: nothing to move */ }
+  })();
+  try { localStorage.removeItem('sp.methods'); } catch (e) { /* ignore */ }
+  let warnedFull = false;
   const store = {
     get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
-    set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) { /* ignore */ } },
+    set(k, v) {
+      try { localStorage.setItem(k, JSON.stringify(v)); return true; }
+      catch (e) {
+        // storage full or blocked (private mode): say so once, instead of losing progress silently
+        if (!warnedFull) { warnedFull = true; setTimeout(() => toast(t('store.failed'), 8000), 0); }
+        return false;
+      }
+    },
     del(k) { try { localStorage.removeItem(k); } catch (e) { /* ignore */ } }
   };
-  const K = { settings: 'mp.settings', history: 'mp.history', pin: 'mp.pin', ai: 'mp.ai', profiles: 'mp.profiles', methods: 'mp.methods', badges: 'mp.badges' };
+  const K = { settings: 'sp.settings', history: 'sp.history', pin: 'sp.pin', ai: 'sp.ai', profiles: 'sp.profiles', badges: 'sp.badges' };
 
   /* ---------- student profiles: up to 3 per browser, each with its own progress and settings ---------- */
   const MAX_PROFILES = 3;
@@ -258,6 +280,10 @@
       }
     }
     if (!questions) questions = Gen.generateSet(subject, year, topic, diff, count);
+    const fromTopic = questions.filter(q => q.topic === topic).length;
+    if (topic !== 'mixed' && fromTopic < questions.length) {
+      toast(t('quiz.toppedUp', { n: fromTopic, topic: t('topic.' + topic) }), 7000);
+    }
     S.quiz = {
       exam: false, questions, i: 0, page: 0, results: [],
       st: questions.map(() => ({ status: 'answering', tries: 0, given: [], sel: null, fbKey: '', draft: '' })),
@@ -324,7 +350,6 @@
     $('#prevPage').disabled = Q.page === 0;
     $('#nextPage').disabled = Q.page >= pages - 1;
     // practice and the timed test share the same navigation: move freely, finish at any time
-    $('#toResults').hidden = true; $('#answerAll').hidden = true;
     $('#examNav').hidden = false;
     $('#finishBtn').textContent = t(Q.exam ? 'sel.finish' : 'quiz.finish');
     {
@@ -377,19 +402,33 @@
     if (q.type === 'mc') {
       const box = el('div', 'choices'); box.setAttribute('role', 'radiogroup'); box.setAttribute('aria-labelledby', 'qt' + i);
       const selected = Q.exam ? Q.answers[i] : st.sel;
+      const choose = k => {
+        if (Q.exam) { if (Q.finished) return; Q.answers[i] = k; refreshCard(i); return; }
+        if (st.status === 'done') return;
+        st.sel = k; st.fbKey = ''; refreshCard(i);
+      };
+      // A radio group is one tab stop: Tab reaches the chosen option (or the first), arrow keys move and choose.
+      const tabStop = selected === null || selected === undefined ? 0 : selected;
       q.choices.forEach((c, k) => {
         const b = el('button', 'choice'); b.type = 'button';
         b.setAttribute('role', 'radio'); b.setAttribute('aria-checked', String(selected === k));
+        b.tabIndex = k === tabStop ? 0 : -1;
         b.disabled = done || (Q.exam && Q.finished);
         if (done && S.parent && k === q.correct) b.classList.add('is-correct');
         const ct = el('span', 'ctext'); ct.innerHTML = Fig.math(c[lang()] || c.en);
         b.append(el('span', 'letter', 'ABCDE'[k]), ct);
-        b.addEventListener('click', () => {
-          if (Q.exam) { if (Q.finished) return; Q.answers[i] = k; refreshCard(i); return; }
-          if (st.status === 'done') return;
-          st.sel = k; st.fbKey = ''; refreshCard(i);
-        });
+        b.addEventListener('click', () => choose(k));
         box.append(b);
+      });
+      box.addEventListener('keydown', e => {
+        const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+        if (!step) return;
+        e.preventDefault();
+        const n = q.choices.length, cur = [...box.children].indexOf(document.activeElement);
+        const k = ((cur < 0 ? tabStop : cur) + step + n) % n;
+        choose(k);
+        const again = $('#qc' + i) && $('#qc' + i).querySelectorAll('.choice')[k];
+        if (again) again.focus();
       });
       card.append(box);
       if (!Q.exam && !done) {
@@ -660,22 +699,26 @@
     }
   }
 
+  /* One row of "score by topic": label, count (and percent), and a bar coloured below 50 % / below 80 % / above. */
+  function topicBar(topic, got, total, showPercent) {
+    const p = Math.round(100 * got / total), row = el('div', 'tbar'), lbl = el('div', 'lbl');
+    lbl.append(el('span', '', t('topic.' + topic)), el('span', '', showPercent ? `${p}% (${got}/${total})` : `${got}/${total}`));
+    const track = el('div', 'track'), fill = el('div', 'fill ' + (p < 50 ? 'low' : p < 80 ? 'mid' : 'high'));
+    fill.style.width = p + '%'; track.append(fill); row.append(lbl, track);
+    return row;
+  }
+
   function renderExamSummary(Q) {
     const rt = $('#resTime'), rc = $('#resCats');
     if (!Q.exam) { rt.hidden = true; rc.hidden = true; return; }
-    const n = Q.questions.length, sec = lang() === 'zh' ? ' 秒' : ' s';
+    const n = Q.questions.length;
     rt.hidden = false;
-    rt.textContent = t('res.time', { used: mmss(Q.timeUsed), limit: mmss(Q.limitMs), per: Math.round(Q.timeUsed / 1000 / n), target: Math.round(Q.limitMs / 1000 / n) + sec });
+    rt.textContent = t('res.time', { used: mmss(Q.timeUsed), limit: mmss(Q.limitMs), per: Math.round(Q.timeUsed / 1000 / n), target: Math.round(Q.limitMs / 1000 / n) });
     const by = {};
     Q.questions.forEach((q, i) => { const b = by[q.topic] = by[q.topic] || [0, 0]; b[1]++; if (Q.results[i].ok) b[0]++; });
     rc.innerHTML = ''; rc.hidden = false;
     rc.append(el('h3', '', t('res.byCat')));
-    Object.keys(by).forEach(k => {
-      const p = Math.round(100 * by[k][0] / by[k][1]), row = el('div', 'tbar'), lbl = el('div', 'lbl');
-      lbl.append(el('span', '', t('topic.' + k)), el('span', '', `${by[k][0]}/${by[k][1]}`));
-      const track = el('div', 'track'), fill = el('div', 'fill ' + (p < 50 ? 'low' : p < 80 ? 'mid' : 'high'));
-      fill.style.width = p + '%'; track.append(fill); row.append(lbl, track); rc.append(row);
-    });
+    Object.keys(by).forEach(k => rc.append(topicBar(k, by[k][0], by[k][1], false)));
   }
 
   /* ---------- stars and badges ----------
@@ -745,7 +788,8 @@
   }
 
   /* ---------- review: one item, its worked method, and the "practise similar" picker ---------- */
-  const methodsOpen = () => S.parent || store.get(K.methods, true) !== false;
+  // A worked method usually shows the answer, so it opens only in parent mode (Terry, v1.6.4).
+  const methodsOpen = () => S.parent;
   function solSteps(sol) {
     const parts = String(sol).split(/(?<=[.;!?])\s+(?=[A-Z(√−0-9])|(?<=[。；])/).map(x => x.trim()).filter(Boolean);
     return parts.length ? parts : [String(sol)];
@@ -756,7 +800,7 @@
     const sum = el('summary', '', t('rev.method'));
     sum.addEventListener('click', async e => {
       if (d.open || methodsOpen()) return;
-      e.preventDefault();                       // methods are switched off for students: ask for the parent PIN
+      e.preventDefault();                       // students need the parent PIN to open a method
       if (await unlockParent()) toast(t('rev.methodUnlocked'));
     });
     d.append(sum);
@@ -850,13 +894,7 @@
     const by = {};
     h.forEach(x => { for (const k in x.byTopic) { const b = by[k] = by[k] || [0, 0]; b[0] += x.byTopic[k][0]; b[1] += x.byTopic[k][1]; } });
     box.append(el('h3', '', t('prog.byTopic')));
-    Object.keys(by).sort((a, b) => by[a][0] / by[a][1] - by[b][0] / by[b][1]).forEach(k => {
-      const p = Math.round(100 * by[k][0] / by[k][1]);
-      const row = el('div', 'tbar');
-      const lbl = el('div', 'lbl'); lbl.append(el('span', '', t('topic.' + k)), el('span', '', `${p}% (${by[k][0]}/${by[k][1]})`));
-      const track = el('div', 'track'); const fill = el('div', 'fill ' + (p < 50 ? 'low' : p < 80 ? 'mid' : 'high')); fill.style.width = p + '%';
-      track.append(fill); row.append(lbl, track); box.append(row);
-    });
+    Object.keys(by).sort((a, b) => by[a][0] / by[a][1] - by[b][0] / by[b][1]).forEach(k => box.append(topicBar(k, by[k][0], by[k][1], true)));
 
     box.append(el('h3', '', t('prog.recent')));
     const ul = el('ul', 'plain');
@@ -931,9 +969,13 @@
         input.focus();
       };
       const onCancel = () => finish(false);
+      /* A forgotten PIN can only be reset by erasing everything the PIN protects, so a student cannot use the reset
+         to get into parent mode quietly: all progress and badges go with it. */
       const onForgot = () => {
         if (!confirm(t('pin.forgotConfirm'))) return;
-        store.del(K.pin); store.del(K.ai); saved = null; msg.textContent = ''; setStep('create'); input.focus();
+        finish(false);
+        eraseAll();
+        location.reload();
       };
       const onClose = () => finish(false);
       function cleanup() {
@@ -954,6 +996,15 @@
     });
   }
 
+  /* Every key this app stores, except the language choice. */
+  function eraseAll() {
+    try {
+      for (const k of Object.keys(localStorage)) {
+        if (k.startsWith('sp.') && k !== 'sp.lang') localStorage.removeItem(k);
+      }
+    } catch (e) { /* storage blocked: nothing stored */ }
+  }
+
   async function unlockParent() {
     if (S.parent) return true;
     if (await pinDialog('unlock')) { S.parent = true; render(); return true; }
@@ -964,7 +1015,6 @@
   let draftProvider = null;
   function renderParent() {
     renderPrompt();
-    $('#methodsToggle').checked = store.get(K.methods, true) !== false;
     const cfg = store.get(K.ai, { provider: 'local', key: '', model: '' });
     if (draftProvider === null) draftProvider = cfg.provider || 'local';
     chips($('#providerChips'), 'provider', ['local', 'claude', 'deepseek'].map(p => [p, t('parent.provider.' + p)]), draftProvider, v => {
@@ -1076,7 +1126,6 @@
   $('#fabStart').addEventListener('click', startOrHome);
   $('#heroStart').addEventListener('click', () => startQuiz(S.settings));
   $('#navStudents').addEventListener('click', () => $('#profileBtn').click());
-  $('#methodsToggle').addEventListener('change', e => { store.set(K.methods, e.target.checked); toast(t('parent.saved')); });
   $('#langBtn').addEventListener('click', () => {
     window.I18N.setLang(lang() === 'zh' ? 'en' : 'zh');
     render();   // instant: re-renders text only, the typed answer and quiz state are untouched
@@ -1093,7 +1142,6 @@
   $('#nextQ').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.i < Q.questions.length - 1) goToQuestion(Q.i + 1); });
   $('#prevPage').addEventListener('click', () => { const Q = S.quiz; if (Q && Q.page > 0) { Q.page -= 1; renderQuiz(); window.scrollTo(0, 0); } });
   $('#nextPage').addEventListener('click', () => { const Q = S.quiz; if (Q && (Q.page + 1) * PAGE < Q.questions.length) { Q.page += 1; renderQuiz(); window.scrollTo(0, 0); } });
-  $('#toResults').addEventListener('click', finishPractice);
   $('#viewSingle').addEventListener('click', () => setView('single'));
   $('#viewPages').addEventListener('click', () => setView('pages'));
   $('#printQuiz').addEventListener('click', () => { const Q = S.quiz; if (Q) openPrint(Q.questions, Q.settings); });

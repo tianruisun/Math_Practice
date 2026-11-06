@@ -16,9 +16,10 @@ Maths and reasoning practice PWA (Years 1–12, Extension 1 and 2) for students,
 ## Tests
 - Run all: `npm test`
 - Run against Test site: `npm test -- --site=https://test.student-practice.pages.dev`
-- Every run ends within its time limits (unit 5 min, smoke 3 min, any single browser step 20 s) and reports a failure instead of hanging.
+- Every run ends within its time limits (unit 5 min, smoke 3 min, flows 4 min, any single browser step 20 s) and reports a failure instead of hanging.
 
 ## Project rules (override the master rules)
 - Languages: English + Simplified Chinese. All interface text lives in `js/i18n.js`.
 - Audience: school students, used on phones; parents use the PIN-protected Parent settings.
-- Answers and worked solutions stay hidden from students unless parent mode allows them.
+- Answers and worked solutions stay hidden from students: a parent types the PIN to show them (no setting turns this off).
+- Stored keys start with `sp.` (this app's own prefix on the shared GitHub Pages origin).

@@ -71,6 +71,9 @@
       'prog.headingFor': 'Progress – {name}',
       'home.countCustom': 'Custom…',
       'home.countCustomLabel': 'How many questions? (1–50)',
+      'quiz.label': 'Quiz',
+      'nav.main': 'Main',
+      'quiz.toppedUp': '{topic} has only {n} different questions here; the rest come from other topics.',
       'quiz.finishConfirm': 'You have {n} unanswered question(s). See results now? Unanswered questions count as wrong.',
       'parent.promptHeading': 'AI prompt',
       'parent.promptInfo': 'This is the instruction sent to the AI when it writes questions. Edit it to change the style of questions. Words in {braces} are filled in automatically: {count}, {student}, {topics}, {difficulty}, {levelNote}, {wordProblems} ({band} for the selective test). The answer-format rules are always added, so the app can read the reply.',
@@ -85,7 +88,6 @@
       'view.pageOf': 'Page {p} of {n}',
       'view.prevPage': 'Previous page',
       'view.nextPage': 'Next page',
-      'quiz.answerAll': 'Answer every question to see your results.',
       'quiz.qnum': 'Question {i}',
       'print.btn': 'Print',
       'print.home': 'Print a worksheet (A4)',
@@ -144,9 +146,6 @@
       'subject.review': 'Review',
       'topic.similar': 'Similar questions',
       'print.infoSimilar': '{n} questions like the ones answered incorrectly',
-      'parent.reviewHeading': 'Review',
-      'parent.methodsToggle': 'Students can open the worked method in the review',
-      'parent.methodsNote': 'A worked method usually shows the answer. Turn this off to keep methods behind the parent PIN.',
       'rev.heading': 'Review your answers',
       'rev.tip': 'Open “Show method” to see how each question is solved. Tick ✓ the ones you got wrong to practise similar questions.',
       'rev.method': 'Show method',
@@ -201,7 +200,7 @@
       'sel.palette': 'Go to question',
       'sel.answered': '{a} of {n} answered',
       'sel.quitConfirm': 'Leave the test? Your answers will not be saved.',
-      'res.time': 'Time used: {used} of {limit} · about {per} seconds per question (target about {target})',
+      'res.time': 'Time used: {used} of {limit} · about {per} seconds per question (target about {target} seconds)',
       'res.byCat': 'By area',
       'loading.sel': 'Writing your practice test with {name}… this can take a minute.',
       'topic.snum': 'Number & algebra',
@@ -314,7 +313,7 @@
       'parent.heading': 'Parent settings',
       'parent.lock': 'Lock parent mode',
       'parent.aiHeading': 'Question source',
-      'parent.aiInfo': 'Questions can be written by an AI (Claude or DeepSeek) using your own API key. The key is stored only in this browser and sent only to the provider you choose. If the AI is unavailable, the built-in generator is used.',
+      'parent.aiInfo': 'Questions can be written by an AI (Claude or DeepSeek) using your own API key. The key is stored only in this browser and sent only to the provider you choose. On tianruisun.github.io other apps share this storage, so use a key with a spending limit. If the AI is unavailable, the built-in generator is used.',
       'parent.provider': 'Provider',
       'parent.provider.local': 'Built-in (offline)',
       'parent.provider.claude': 'Claude (Anthropic)',
@@ -340,11 +339,12 @@
       'pin.mismatch': 'The PINs did not match. Start again.',
       'pin.short': 'Please use exactly 4 digits.',
       'pin.forgot': 'Forgot PIN? Reset it',
-      'pin.forgotConfirm': 'Reset the PIN? This also removes the saved AI key from this device.',
+      'pin.forgotConfirm': 'Reset the PIN? This deletes every student\'s progress, badges and settings on this device, and the saved AI key. It cannot be undone.',
       'pin.note': 'The PIN keeps answers hidden from students. It is a child lock, not strong security.',
 
       'update.ready': 'A new version is ready.',
       'update.reload': 'Reload',
+      'store.failed': 'This browser is not saving progress (storage full or private browsing).',
       'offline': 'You are offline – using built-in questions.'
     },
 
@@ -415,6 +415,9 @@
       'prog.headingFor': '学习进度 – {name}',
       'home.countCustom': '自定义…',
       'home.countCustomLabel': '题目数量（1–50）',
+      'quiz.label': '答题',
+      'nav.main': '主导航',
+      'quiz.toppedUp': '“{topic}”这里只有 {n} 道不同的题，其余题目来自其他知识点。',
       'quiz.finishConfirm': '还有 {n} 题未作答。现在查看结果吗？未作答的题目按答错计算。',
       'parent.promptHeading': 'AI 提示词',
       'parent.promptInfo': '这是 AI 出题时收到的指令，修改它可以改变题目的风格。花括号中的内容会自动填入：{count}、{student}、{topics}、{difficulty}、{levelNote}、{wordProblems}（选拔考试用 {band}）。答案格式规则会自动附加，确保应用能读取 AI 的回复。',
@@ -429,7 +432,6 @@
       'view.pageOf': '第 {p} 页，共 {n} 页',
       'view.prevPage': '上一页',
       'view.nextPage': '下一页',
-      'quiz.answerAll': '答完所有题目后才能查看结果。',
       'quiz.qnum': '第 {i} 题',
       'print.btn': '打印',
       'print.home': '打印练习卷（A4）',
@@ -488,9 +490,6 @@
       'subject.review': '复习',
       'topic.similar': '同类题巩固',
       'print.infoSimilar': '共 {n} 题，与做错的题目同类',
-      'parent.reviewHeading': '复习',
-      'parent.methodsToggle': '学生复习时可以查看解题方法',
-      'parent.methodsNote': '解题方法通常会显示答案。关闭后，需要输入家长密码才能查看。',
       'rev.heading': '复习答题情况',
       'rev.tip': '点开“查看解题方法”学习每道题的解法；在做错的题上打勾 ✓，可以练习同类题。',
       'rev.method': '查看解题方法',
@@ -545,7 +544,7 @@
       'sel.palette': '跳到题目',
       'sel.answered': '已答 {a} / {n} 题',
       'sel.quitConfirm': '确定离开考试吗？答案不会保存。',
-      'res.time': '用时 {used} / {limit} · 平均每题约 {per} 秒（目标约 {target}）',
+      'res.time': '用时 {used} / {limit} · 平均每题约 {per} 秒（目标约 {target} 秒）',
       'res.byCat': '各部分得分',
       'loading.sel': '正在请 {name} 出整套模拟题……可能需要一分钟。',
       'topic.snum': '数与代数',
@@ -658,7 +657,7 @@
       'parent.heading': '家长设置',
       'parent.lock': '退出家长模式',
       'parent.aiHeading': '题目来源',
-      'parent.aiInfo': '可以使用你自己的 API 密钥，让 AI（Claude 或 DeepSeek）出题。密钥只保存在本浏览器中，只会发送给你选择的服务商。如果 AI 无法使用，将自动改用内置题库。',
+      'parent.aiInfo': '可以使用你自己的 API 密钥，让 AI（Claude 或 DeepSeek）出题。密钥只保存在本浏览器中，只会发送给你选择的服务商。在 tianruisun.github.io 上，其他应用共用这份存储，请使用设有消费上限的密钥。如果 AI 无法使用，将自动改用内置题库。',
       'parent.provider': '服务商',
       'parent.provider.local': '内置题库（可离线）',
       'parent.provider.claude': 'Claude（Anthropic）',
@@ -684,19 +683,21 @@
       'pin.mismatch': '两次密码不一致，请重新设置。',
       'pin.short': '请输入 4 位数字。',
       'pin.forgot': '忘记密码？重置',
-      'pin.forgotConfirm': '确定重置密码吗？这也会删除本设备上保存的 AI 密钥。',
+      'pin.forgotConfirm': '确定重置密码吗？这会删除本设备上所有学生的学习记录、徽章和设置，以及保存的 AI 密钥，且无法恢复。',
       'pin.note': '密码用于对学生隐藏答案，只是儿童锁，并非严格的安全措施。',
 
       'update.ready': '新版本已就绪。',
       'update.reload': '刷新',
+      'store.failed': '本浏览器无法保存学习记录（存储空间已满或处于无痕模式）。',
       'offline': '当前离线，使用内置题目。'
     }
   };
 
-  const LANG_KEY = 'mp.lang';
+  const LANG_KEY = 'sp.lang';
   let lang = 'en';
   try {
-    const saved = localStorage.getItem(LANG_KEY);
+    // 'mp.lang' is the key used up to v1.6.3; app.js moves all old keys to 'sp.' once it loads
+    const saved = localStorage.getItem(LANG_KEY) || localStorage.getItem('mp.lang');
     if (saved && STRINGS[saved]) lang = saved;
     else if ((navigator.language || '').toLowerCase().startsWith('zh')) lang = 'zh';
   } catch (e) { /* storage blocked: use default */ }

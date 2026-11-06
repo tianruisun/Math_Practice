@@ -6,11 +6,18 @@ const path = require('path');
 const { serve } = require('./serve.js');
 const smoke = require('./smoke.js');
 const CONFIG = require('./config.js');
+const flows = CONFIG.flows ? require('./flows.js') : null;
 
 const ROOT = path.resolve(__dirname, '..');
 const MIN = 60 * 1000;
 // Time limits, so a run always ends with a result instead of hanging (override in config.js).
-const LIMIT = { unit: (CONFIG.unitMinutes || 5) * MIN, smoke: (CONFIG.smokeMinutes || 3) * MIN };
+const LIMIT = { unit: (CONFIG.unitMinutes || 5) * MIN, smoke: (CONFIG.smokeMinutes || 3) * MIN, flows: (CONFIG.flowsMinutes || 4) * MIN };
+
+/* A browser suite within its time limit; a crash or a timeout counts as one failure with the reason. */
+async function browserSuite(name, fn) {
+  try { return await Promise.race([fn(), timeout(LIMIT[name], name)]); }
+  catch (e) { return { pass: 0, fail: 1, note: e.message.split('\n')[0] }; }
+}
 
 const timeout = (ms, what) => new Promise((_, reject) => setTimeout(() => reject(new Error(`${what} timed out after ${ms / MIN} min`)), ms).unref());
 
@@ -31,8 +38,8 @@ function nodeSuite(file) {
   if (!site) { server = await serve(ROOT); site = `http://127.0.0.1:${server.address().port}/`; }
   else if (!/^https?:\/\//.test(site)) { console.log(`--site must start with http:// or https:// (got ${site})`); process.exit(1); }
   const results = { unit: nodeSuite(CONFIG.unit), kit: nodeSuite('tests/kit.js') };
-  try { results.smoke = await Promise.race([smoke.run(site, { local: !!server }), timeout(LIMIT.smoke, 'smoke')]); }
-  catch (e) { results.smoke = { pass: 0, fail: 1, note: e.message.split('\n')[0] }; }
+  results.smoke = await browserSuite('smoke', () => smoke.run(site, { local: !!server }));
+  if (flows) results.flows = await browserSuite('flows', () => flows.run(site));
   if (server) server.close();
 
   console.log(`\nSite: ${site}`);

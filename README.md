@@ -1,6 +1,6 @@
 # Maths & Reasoning · 数学与思维 (Years 1–12, Extension 1 & 2)
 
-A mobile-first, installable maths and reasoning practice web app (PWA) for students in Years 4 to 10.
+A mobile-first, installable maths and reasoning practice web app (PWA) for students in Years 1 to 12, including NSW HSC Extension 1 and 2.
 Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so it runs on GitHub Pages as-is.
 
 ## Features
@@ -9,7 +9,7 @@ Plain HTML/CSS/JS – no frameworks, no build step, relative paths only – so i
   - **应用题 word problems**: classic types (和差, 和倍, 差倍, 鸡兔同笼, 植树, 年龄, 相遇/追及, 火车过桥, 工程, 盈亏, 浓度, 利润折扣, Singapore before/after fractions and transfer problems, equation and simultaneous-equation problems, quadratic area problems). About 1 in 3 questions in a Mixed maths set is a word problem; the worked solution shows the equation.
   - **General ability (综合能力)** – multiple choice: number series, letter series, codes, logical reasoning (ordering, calendars, truth-tellers, knights and knaves), symbol puzzles, visual patterns, spatial reasoning and counting. Puzzles avoid wordplay so both languages ask exactly the same question.
 - **Stars and badges:** results show 3 stars for 100% (plus a **Good job badge** added to the student's profile), 2 stars for 80–99% (aim for 100% next time), 1 star for 60–79% (aim higher next time) and none below 60% (learn the methods first, then try again). Badges show on the avatar and in Progress; recent sessions show their stars.
-- **Review with worked methods:** after a session (and under Progress → Review), every question has a **Show method** panel with the worked solution set out step by step. Parents can switch this off for students in Parent settings → Review, so that the method needs the PIN.
+- **Review with worked methods:** after a session (and under Progress → Review), every question has a **Show method** panel with the worked solution set out step by step. A worked method usually shows the answer, so students need a parent to type the PIN before it opens.
 - **Practise similar questions:** tick ✓ any question answered incorrectly, choose how many similar questions to make for each one (1, 2, 3, 5 or 10), and start a reinforcement set. Each question remembers where it came from, so similar questions use the same problem type with new numbers: the same competition or Selective template, or the same topic generator, keeping the candidates that read most like the original. Sets are capped at 50 questions.
 - **New look:** greeting header with the student's avatar, a hero banner, subject tiles with icons, a bottom navigation bar with a centre Start button, and a soft lavender and violet theme (Poppins font, dark mode included).
   - **Competition (数学竞赛)** – timed papers in the style of the Australian Mathematics Competition, one per division: Middle Primary (Years 3–4), Upper Primary (5–6), Junior (7–8), Intermediate (9–10), Senior (11–12). Each has **30 questions**: Q1–25 multiple choice A–E, Q26–30 whole-number answers 0–999. Primary papers take 60 minutes and secondary papers 75. Marks are 3/4/5 and then 6–10, for 135 in total. There is also an **AIMO-style olympiad paper**: 10 questions, whole-number answers, 4 hours, 35 marks. Half papers are available. Results show marks as well as the number correct.
