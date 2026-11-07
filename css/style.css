@@ -620,4 +620,6 @@ legend.sec-title { padding: 0; }
 .profile-list li { flex-wrap: wrap; }
 .profile-edit { flex-basis: 100%; display: grid; gap: 0.5rem; padding: 0.6rem 0 0.2rem; }
 .profile-edit .field { display: grid; gap: 0.2rem; font-size: 0.9rem; color: var(--muted); }
+.profile-hint { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4rem; margin: 0; }
+.profile-hint[hidden] { display: none; }
 .profile-edit input, .profile-edit select { min-height: 44px; padding: 0 0.7rem; border: 1.5px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--ink); font: inherit; }

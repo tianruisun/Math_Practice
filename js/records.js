@@ -41,12 +41,16 @@
     const year = now.getFullYear();
     let y = null;
     if (profile && profile.schoolYear) y = profile.schoolYear + (year - (profile.schoolYearSet || year));
-    else if (profile && /^\d{4}-\d{2}$/.test(profile.dob || '')) {
-      const [by, bm] = profile.dob.split('-').map(Number);
-      y = year - by - (bm <= 7 ? 5 : 6);
-    }
+    else if (profile) y = yearByAge(profile.dob, now);
     if (y === null || !Number.isFinite(y)) return null;
     return Math.max(1, Math.min(12, y));
+  }
+  /* The school year a birth month gives this calendar year, NOT clamped: 0 is Kindergarten, below that not at school
+     yet, above 12 left school. null without a valid birth month. */
+  function yearByAge(dob, now) {
+    if (!/^\d{4}-\d{2}$/.test(dob || '')) return null;
+    const [by, bm] = dob.split('-').map(Number);
+    return now.getFullYear() - by - (bm <= 7 ? 5 : 6);
   }
 
   /* ---------- progress file (CSV) ----------
@@ -254,7 +258,7 @@
   const sessionKey = h => [h.date, h.subject, h.n, h.correct].join('|');
   const badgeKey = b => [b.date, b.kind || 'perfect', levelOf(b)].join('|');
 
-  const api = { KINDS, MIN_QUESTIONS, SPEED_SECONDS, awardsFor, levelOf, collection, suggestYear, COLUMNS, toCSV, parseCSV, fromCSV, merge, sessionKey, badgeKey };
+  const api = { KINDS, MIN_QUESTIONS, SPEED_SECONDS, awardsFor, levelOf, collection, suggestYear, yearByAge, COLUMNS, toCSV, parseCSV, fromCSV, merge, sessionKey, badgeKey };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.Records = api;
 })(typeof window !== 'undefined' ? window : globalThis);

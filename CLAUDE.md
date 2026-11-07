@@ -12,6 +12,8 @@ Maths and reasoning practice PWA (Years 1–12, Extension 1 and 2) for students,
 ## Tech
 - Plain HTML/CSS/JS, no build step. Cloudflare build settings: preset None, no build command, output `/`.
 - Version lives in: `version.js` (also names the offline cache `maths-<version>`, and lists the Production hosts)
+- `sw.js` has `BUILD = '<version>+<n>'`. Change it in every release and before every push to Test that changes an app file,
+  or phones keep the old files (a browser only updates its service worker when `sw.js` itself changes). `npm test` checks it.
 
 ## Tests
 - Run all: `npm test`
