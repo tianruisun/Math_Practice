@@ -282,6 +282,8 @@ t('F.4 Year 1-3 fraction multiple choice has 4 options, all different values', (
   const nov = new Date(2026, 10, 6);
   t('suggested year: school year entered this year', () => assert.strictEqual(Rec.suggestYear({ schoolYear: 4, schoolYearSet: 2026 }, nov), 4));
   t('suggested year: moves up each new calendar year', () => assert.strictEqual(Rec.suggestYear({ schoolYear: 4, schoolYearSet: 2026 }, new Date(2028, 1, 1)), 6));
+  t('year by age: not clamped (R6.3)', () => { assert.strictEqual(Rec.yearByAge('2022-06', nov), -1); assert.strictEqual(Rec.yearByAge('2021-03', nov), 0); assert.strictEqual(Rec.yearByAge('2010-03', nov), 11); assert.strictEqual(Rec.yearByAge('', nov), null); assert.strictEqual(Rec.yearByAge('2010-3', nov), null); });
+  t('suggested year: a preschool birth month still clamps to Year 1', () => assert.strictEqual(Rec.suggestYear({ dob: '2022-06' }, nov), 1));
   t('suggested year: school year wins over birth month', () => assert.strictEqual(Rec.suggestYear({ schoolYear: 3, schoolYearSet: 2026, dob: '2016-03' }, nov), 3));
   t('suggested year: born Jan-Jul starts Kindergarten the year they turn 5', () => {
     assert.strictEqual(Rec.suggestYear({ dob: '2016-03' }, nov), 5);   // K 2021, Year 5 in 2026
@@ -441,6 +443,26 @@ t('i18n: no key defined twice in a language', () => {
     assert.deepStrictEqual(dup, [], name + ' duplicates');
   }
 });
+
+/* R6.2 (v1.7.0): phones only fetch new files when sw.js itself changes, so its BUILD must follow the version, and must
+   change whenever an app file changed since the last pushed tag. */
+{
+  const fs = require('fs'), path = require('path'), { spawnSync } = require('child_process');
+  const root = path.join(__dirname, '..');
+  const buildOf = src => ((/const BUILD = '([^']+)'/.exec(src || '') || [])[1]) || null;
+  const build = buildOf(fs.readFileSync(path.join(root, 'sw.js'), 'utf8'));
+  const version = (/APP_VERSION = '([^']+)'/.exec(fs.readFileSync(path.join(root, 'version.js'), 'utf8')) || [])[1];
+  t('sw.js BUILD is <version>+<n> of version.js', () => assert.ok(build && new RegExp('^' + version.replace(/\./g, '\\.') + '\\+\\d+$').test(build), `BUILD ${build}, version ${version}`));
+  const git = (...a) => spawnSync('git', ['-C', root, ...a], { encoding: 'utf8', windowsHide: true, timeout: 20000 });
+  const tag = (git('tag', '--list', 'v*', '--sort=-creatordate').stdout || '').split('\n')[0].trim();
+  if (!tag) console.log('note: no v* tag found (or no git), the BUILD-since-last-push check is skipped');
+  else t(`sw.js BUILD changed since ${tag} when an app file did`, () => {
+    const changed = (git('diff', '--name-only', tag).stdout || '').split('\n').map(s => s.trim()).filter(Boolean)
+      .filter(f => !/^tests\/|\.md$|^\.|^package(-lock)?\.json$/.test(f));
+    const before = buildOf(git('show', tag + ':sw.js').stdout);
+    assert.ok(changed.length === 0 || before !== build, `app files changed since ${tag} (${changed.slice(0, 5).join(', ')}) but BUILD is still ${build}`);
+  });
+}
 
 console.log(`${pass} passed, ${fail} failed (${gen} generated questions checked)`);
 process.exit(fail ? 1 : 0);

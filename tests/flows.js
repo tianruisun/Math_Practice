@@ -417,6 +417,56 @@ async function run(site) {
       await context.close();
     });
 
+    // R6.3 / R6.4 (v1.7.0): the hint only for an age at school in Years 1-12, and as a plain "Year N"
+    await flow('R6.3 R6.4 hint range and label', async () => {
+      const y = new Date().getFullYear(), dobFor = n => (y - n - 5) + '-03';   // born in March: Year n this year
+      const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Dee' }], active: 'p1' });
+      const { context, page, errors } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings() });
+      await page.click('#profileBtn');
+      await page.locator('#profileList .icon-btn').first().click();
+      const hint = page.locator('.profile-edit .profile-hint');
+      await page.fill('.profile-edit input[type=month]', dobFor(11));
+      const text = (await hint.isVisible()) ? await hint.textContent() : '';
+      check('R6.4 Year 11 by age reads "Year 11", not a course name', /Year 11\./.test(text) && !/Advanced|Standard|Extension/.test(text), text);
+      for (const n of [0, -1, -3]) {
+        await page.fill('.profile-edit input[type=month]', dobFor(n));
+        check(`R6.3 no hint for an age before Year 1 (${n})`, !(await hint.isVisible()), dobFor(n));
+      }
+      await page.fill('.profile-edit input[type=month]', dobFor(1));
+      check('R6.3 hint for Year 1', await hint.isVisible() && /Year 1\./.test(await hint.textContent()), await hint.textContent());
+      check('R6.3 R6.4 no page errors', errors.length === 0, errors.join(' | '));
+      await context.close();
+    });
+
+    // R6.1 (v1.7.0): a year picked on Home before any suggestion exists is kept when one appears
+    await flow('R6.1 a year picked before any suggestion', async () => {
+      const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Eve' }], active: 'p1' });
+      const { context, page, errors } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings() });
+      await page.selectOption('#schoolSel', 'high');
+      await page.selectOption('#yearSel', '8');
+      await page.click('#profileBtn');
+      await page.locator('#profileList .icon-btn').first().click();
+      await page.selectOption('.profile-edit select', '3');
+      await page.click('.profile-edit button[type=submit]');
+      await page.click('#profileClose');
+      check('R6.1 Home keeps the Year 8 picked before the details', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
+      check('R6.1 the suggestion is remembered', (await page.evaluate(k => JSON.parse(localStorage.getItem(k)).suggested, SETTINGS)) === 3);
+      await page.reload({ waitUntil: 'load' });
+      check('R6.1 still Year 8 after a reload', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
+      check('R6.1 no page errors', errors.length === 0, errors.join(' | '));
+      await context.close();
+      {   // nothing picked by hand: the first suggestion still sets the year
+        const { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings() });
+        await page.click('#profileBtn');
+        await page.locator('#profileList .icon-btn').first().click();
+        await page.selectOption('.profile-edit select', '3');
+        await page.click('.profile-edit button[type=submit]');
+        await page.click('#profileClose');
+        check('R6.1 with no year picked, the first suggestion sets Year 3', (await page.inputValue('#yearSel')) === '3', await page.inputValue('#yearSel'));
+        await context.close();
+      }
+    });
+
     await flow('R2 import and Progress', async () => {
       const os = require('os'), fs = require('fs'), path = require('path'), Rec = require('../js/records.js');
       const { context, page, errors } = await freshPage(browser, site, { [SETTINGS]: settings() });

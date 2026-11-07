@@ -205,10 +205,12 @@
     $('#startBtn').textContent = t(isSel ? 'sel.start' : isComp ? 'comp.start' : 'home.start');
     if (!YEARS.includes(st.year)) st.year = 6;
     const school = schoolOf(st.year);
+    // A year chosen here is the student's or parent's own choice: remembered, so a suggestion that appears later
+    // (student details, an imported file) does not replace it (R6.1, v1.7.0).
     combo($('#schoolSel'), ['primary', 'high'].map(k => [k, t('school.' + k)]), school, v => {
-      st.year = v === 'primary' ? Math.min(st.year, 6) : Math.max(st.year, 7); saveSettings(); renderHome();
+      st.year = v === 'primary' ? Math.min(st.year, 6) : Math.max(st.year, 7); st.yearPicked = true; saveSettings(); renderHome();
     });
-    combo($('#yearSel'), (school === 'primary' ? Gen.PRIMARY : Gen.HIGH).map(y => [y, yearLabel(y)]), st.year, v => { st.year = +v; saveSettings(); renderHome(); });
+    combo($('#yearSel'), (school === 'primary' ? Gen.PRIMARY : Gen.HIGH).map(y => [y, yearLabel(y)]), st.year, v => { st.year = +v; st.yearPicked = true; saveSettings(); renderHome(); });
     combo($('#topicSel'), topicOptions(st.subject, st.year), st.topic, v => { st.topic = v; saveSettings(); });
     combo($('#diffSel'), [1, 2, 3, 4].map(d => [d, t('diff.' + d)]), st.diff, v => { st.diff = +v; saveSettings(); });
     const isCustom = !COUNTS.includes(st.count);
@@ -1188,11 +1190,13 @@
     const hint = el('p', 'profile-hint muted small'); hint.setAttribute('aria-live', 'polite'); f.append(hint);
     const showHint = () => {
       hint.innerHTML = '';
-      const byAge = /^\d{4}-\d{2}$/.test(dob.value) ? Records.suggestYear({ dob: dob.value }, new Date()) : null;
-      if (!byAge || yr.value === String(byAge)) { hint.hidden = true; return; }
-      const use = el('button', 'btn ghost small', t('profile.useYear', { year: yearLabel(byAge) })); use.type = 'button';
+      // Only for an age that is at school in Years 1-12 (R6.3); the plain "Year N", not a course name (R6.4).
+      const byAge = Records.yearByAge(dob.value, new Date());
+      if (byAge === null || byAge < 1 || byAge > 12 || yr.value === String(byAge)) { hint.hidden = true; return; }
+      const label = t('home.yearN', { n: byAge });
+      const use = el('button', 'btn ghost small', t('profile.useYear', { year: label })); use.type = 'button';
       use.addEventListener('click', () => { yr.value = String(byAge); showHint(); yr.focus(); });
-      hint.append(el('span', '', t('profile.ageHint', { year: yearLabel(byAge) }) + ' '), use);
+      hint.append(el('span', '', t('profile.ageHint', { year: label }) + ' '), use);
       hint.hidden = false;
     };
     yr.addEventListener('change', showHint); dob.addEventListener('input', showHint); dob.addEventListener('change', showHint);
@@ -1222,7 +1226,9 @@
   function applySuggestedYear() {
     const y = Records.suggestYear(Profiles.active, new Date()), st = S.settings;
     if (!y || st.suggested === y) return;
-    const handPicked = st.suggested !== undefined && st.suggested !== null && st.year !== st.suggested;
+    // With a suggestion stored, a year that differs from it was picked by hand. Before any suggestion exists, only the
+    // flag set on Home says so (R6.1).
+    const handPicked = st.suggested == null ? st.yearPicked === true : st.year !== st.suggested;
     if (!handPicked) st.year = y;
     st.suggested = y; saveSettings();
   }
