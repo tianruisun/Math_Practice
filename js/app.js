@@ -1181,9 +1181,22 @@
     yr.append(new Option(t('profile.yearUnset'), ''));
     for (let y = 1; y <= 12; y++) yr.append(new Option(yearLabel(y), String(y)));
     yr.value = pr.schoolYear ? String(Records.suggestYear({ schoolYear: pr.schoolYear, schoolYearSet: pr.schoolYearSet }, now)) : '';
-    const shownYear = yr.value;
     const dob = field('profile.dob', el('input')); dob.type = 'month'; dob.value = pr.dob || '';
     dob.min = (thisYear - 25) + '-01'; dob.max = thisYear + '-' + String(now.getMonth() + 1).padStart(2, '0');
+    // The birth month, read against today's date, gives the usual school year. When it differs from the school year
+    // chosen above, say so and offer it; the parent decides (Terry, R4.1, v1.7.0). Nothing changes until Save.
+    const hint = el('p', 'profile-hint muted small'); hint.setAttribute('aria-live', 'polite'); f.append(hint);
+    const showHint = () => {
+      hint.innerHTML = '';
+      const byAge = /^\d{4}-\d{2}$/.test(dob.value) ? Records.suggestYear({ dob: dob.value }, new Date()) : null;
+      if (!byAge || yr.value === String(byAge)) { hint.hidden = true; return; }
+      const use = el('button', 'btn ghost small', t('profile.useYear', { year: yearLabel(byAge) })); use.type = 'button';
+      use.addEventListener('click', () => { yr.value = String(byAge); showHint(); yr.focus(); });
+      hint.append(el('span', '', t('profile.ageHint', { year: yearLabel(byAge) }) + ' '), use);
+      hint.hidden = false;
+    };
+    yr.addEventListener('change', showHint); dob.addEventListener('input', showHint); dob.addEventListener('change', showHint);
+    showHint();
     const row = el('div', 'row');
     const cancel = el('button', 'btn ghost', t('pin.cancel')); cancel.type = 'button';
     cancel.addEventListener('click', () => { editingProfile = null; renderProfiles(); });
@@ -1192,29 +1205,25 @@
     f.addEventListener('submit', e => {
       e.preventDefault();
       const y = +yr.value || null, d = /^\d{4}-\d{2}$/.test(dob.value) ? dob.value : '';
-      // The year on Home is set again only when the details changed AND that moved the suggested year. A name edit
-      // (R2.1), or a birth month that does not change the suggestion (e.g. a school year is also set, which wins),
-      // keeps a year picked by hand (R3.1, v1.7.0).
-      const changed = yr.value !== shownYear || d !== (pr.dob || '');
+      // The details only move the default year on Home. A year the student or parent picked by hand on Home is
+      // kept, whatever is edited here (Terry, R4.1, v1.7.0); applySuggestedYear remembers the new suggestion.
       Profiles.update(pr.id, { name: name.value.trim().slice(0, 20), schoolYear: y, schoolYearSet: y ? thisYear : null, dob: d });
       editingProfile = null;
-      if (pr === Profiles.active) {
-        const moved = Records.suggestYear(pr, new Date()) !== S.settings.suggested;
-        applySuggestedYear(changed && moved);
-      }
+      if (pr === Profiles.active) applySuggestedYear();
       renderProfiles(); render();
       toast(t('parent.saved'));
     });
     return f;
   }
-  /* Choose the year the student most likely practises: when the details are saved (force), the first time a
-     suggestion exists, and when a new school year moves the suggestion on. A year picked by hand on Home (one that
-     is not the last suggestion) is a parent's choice and is kept; the new suggestion is only remembered (R1.2, v1.7.0). */
-  function applySuggestedYear(force) {
+  /* The suggested year is only the default on Home. It is applied the first time a suggestion exists, and when the
+     suggestion moves on (details saved, a new calendar year) while Home still shows the old suggestion. A year picked
+     by hand on Home (one that is not the last suggestion) is always kept; the new suggestion is only remembered
+     (R1.2; Terry's decision on R4.1, v1.7.0). */
+  function applySuggestedYear() {
     const y = Records.suggestYear(Profiles.active, new Date()), st = S.settings;
-    if (!y || (!force && st.suggested === y)) return;
+    if (!y || st.suggested === y) return;
     const handPicked = st.suggested !== undefined && st.suggested !== null && st.year !== st.suggested;
-    if (force || !handPicked) st.year = y;
+    if (!handPicked) st.year = y;
     st.suggested = y; saveSettings();
   }
   function renderProfiles() {

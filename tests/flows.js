@@ -320,11 +320,19 @@ async function run(site) {
       await context.close();
     });
 
-    // R2.1 (v1.7.0): saving the student details keeps a hand-picked year unless the school year or birth month changed
+    // R2.1 / R4.1 (v1.7.0): the student details only move the default year. A year picked by hand on Home is kept
+    // whatever is edited (Terry's decision on R4.1); a Home year that was the suggestion follows the new one.
     await flow('R2.1 details save keeps a hand-picked year', async () => {
       const y = new Date().getFullYear();
       const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ann', schoolYear: 5, schoolYearSet: y }], active: 'p1' });
       const { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 8, suggested: 5 }) });
+      const editYear = async v => {
+        await page.click('#profileBtn');
+        await page.locator('#profileList .icon-btn').first().click();
+        await page.selectOption('.profile-edit select', v);
+        await page.click('.profile-edit button[type=submit]');
+        await page.click('#profileClose');
+      };
       check('R2.1 Home starts on the hand-picked Year 8', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
       await page.click('#profileBtn');
       await page.locator('#profileList .icon-btn').first().click();
@@ -332,16 +340,23 @@ async function run(site) {
       await page.click('.profile-edit button[type=submit]');
       await page.click('#profileClose');
       check('R2.1 a name edit keeps Year 8', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
-      await page.click('#profileBtn');
-      await page.locator('#profileList .icon-btn').first().click();
-      await page.selectOption('.profile-edit select', '6');
-      await page.click('.profile-edit button[type=submit]');
-      await page.click('#profileClose');
-      check('R2.1 a new school year still sets the year', (await page.inputValue('#yearSel')) === '6', await page.inputValue('#yearSel'));
+      await editYear('6');
+      check('R4.1 a new school year keeps the hand-picked Year 8', (await page.inputValue('#yearSel')) === '8', await page.inputValue('#yearSel'));
+      check('R4.1 the new suggestion is remembered', (await page.evaluate(k => JSON.parse(localStorage.getItem(k)).suggested, SETTINGS)) === 6);
       await context.close();
+      {   // Home still on the suggestion: the default moves it
+        const { context, page: p2 } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 5, suggested: 5 }) });
+        await p2.click('#profileBtn');
+        await p2.locator('#profileList .icon-btn').first().click();
+        await p2.selectOption('.profile-edit select', '6');
+        await p2.click('.profile-edit button[type=submit]');
+        await p2.click('#profileClose');
+        check('R4.1 a Home year that was the suggestion follows a new school year', (await p2.inputValue('#yearSel')) === '6', await p2.inputValue('#yearSel'));
+        await context.close();
+      }
     });
 
-    // R3.1 (v1.7.0): a birth-month edit that does not move the suggestion keeps a hand-picked year; one that does, sets it
+    // R3.1 / R4.1 (v1.7.0): a birth-month edit keeps a hand-picked year, even when it moves the suggestion
     await flow('R3.1 birth month and a hand-picked year', async () => {
       const Rec = require('../js/records.js'), y = new Date().getFullYear();
       const edit = async (page, month) => {
@@ -351,6 +366,7 @@ async function run(site) {
         await page.click('.profile-edit button[type=submit]');
         await page.click('#profileClose');
       };
+      const stored = page => page.evaluate(k => JSON.parse(localStorage.getItem(k)).suggested, SETTINGS);
       // Hermes's case: school year 8 entered this year (it wins over the birth month), Home picked by hand: Year 10
       {
         const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ann', schoolYear: 8, schoolYearSet: y }], active: 'p1' });
@@ -360,18 +376,47 @@ async function run(site) {
         check('R3.1 a birth month that does not move the suggestion keeps Year 10', (await page.inputValue('#yearSel')) === '10', await page.inputValue('#yearSel'));
         await context.close();
       }
-      // no school year: the birth month is what the suggestion comes from, so a new birth month that moves it sets the year
+      // no school year, so the suggestion comes from the birth month (R4.1, measured by Hermes)
+      const from = Rec.suggestYear({ dob: '2016-03' }, new Date()), to = Rec.suggestYear({ dob: '2014-03' }, new Date());
       {
-        const from = Rec.suggestYear({ dob: '2016-03' }, new Date()), to = Rec.suggestYear({ dob: '2014-03' }, new Date());
         const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ben', dob: '2016-03' }], active: 'p1' });
         const { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: 10, suggested: from }) });
         await edit(page, '2014-03');
-        check('R3.1 a birth month that moves the suggestion sets the year', (await page.inputValue('#yearSel')) === String(to), (await page.inputValue('#yearSel')) + ' want ' + to);
+        check('R4.1 a birth month that moves the suggestion keeps the hand-picked Year 10', (await page.inputValue('#yearSel')) === '10', await page.inputValue('#yearSel'));
+        check('R4.1 and remembers the new suggestion', (await stored(page)) === to, String(await stored(page)) + ' want ' + to);
+        await context.close();
+      }
+      {
+        const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Ben', dob: '2016-03' }], active: 'p1' });
+        const { context, page } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: from, suggested: from }) });
+        await edit(page, '2014-03');
+        check('R4.1 a Home year that was the suggestion follows the birth month', (await page.inputValue('#yearSel')) === String(to), (await page.inputValue('#yearSel')) + ' want ' + to);
         await context.close();
       }
     });
 
-    // R2.2-R2.5 (v1.7.0): rows typed in a spreadsheet, names the app does not know, skipped rows said, no Clear on an empty screen
+    // R4.1 (v1.7.0): the birth month, read against today's date, suggests a school year in the editor; the parent decides
+    await flow('R4.1 school year hint from the birth month', async () => {
+      const Rec = require('../js/records.js'), y = new Date().getFullYear();
+      const byAge = Rec.suggestYear({ dob: '2014-03' }, new Date()), set = byAge === 3 ? 4 : 3;
+      const profiles = JSON.stringify({ list: [{ id: 'p1', name: 'Cal', schoolYear: set, schoolYearSet: y, dob: '2014-03' }], active: 'p1' });
+      const { context, page, errors } = await freshPage(browser, site, { 'sp.profiles': profiles, [SETTINGS]: settings({ year: set, suggested: set }) });
+      await page.click('#profileBtn');
+      await page.locator('#profileList .icon-btn').first().click();
+      const hint = page.locator('.profile-edit .profile-hint');
+      check('R4.1 hint shows when the school year differs from the birth month', await hint.isVisible() && (await hint.textContent()).includes('Year ' + byAge), await hint.textContent());
+      check('R4.1 the hint changes nothing by itself', (await page.inputValue('.profile-edit select')) === String(set));
+      await hint.locator('button').click();
+      check('R4.1 Use sets the school year field', (await page.inputValue('.profile-edit select')) === String(byAge), await page.inputValue('.profile-edit select'));
+      check('R4.1 the hint hides once they match', !(await hint.isVisible()));
+      await page.selectOption('.profile-edit select', String(set));
+      check('R4.1 the parent can still choose another year', (await page.inputValue('.profile-edit select')) === String(set) && await hint.isVisible());
+      await page.fill('.profile-edit input[type=month]', '');
+      check('R4.1 no birth month, no hint', !(await hint.isVisible()));
+      check('R4.1 hint: no page errors', !errors || errors.length === 0, (errors || []).join(' | '));
+      await context.close();
+    });
+
     await flow('R2 import and Progress', async () => {
       const os = require('os'), fs = require('fs'), path = require('path'), Rec = require('../js/records.js');
       const { context, page, errors } = await freshPage(browser, site, { [SETTINGS]: settings() });
